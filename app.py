@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import re
 from math import comb
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -163,8 +164,9 @@ def summary() -> None:
                     eur(stats.std_net), pct(stats.p_profit * 100), note)
 
 
-tab_res, tab_win, tab_cmp, tab_ilp, tab_pulp, tab_sim, tab_model = st.tabs(
-    ["Risultato", "Calcolo vincite", "Confronto", "Verifica ILP", "ILP con PuLP", "Simulazione", "Modello"])
+tab_res, tab_win, tab_cmp, tab_ilp, tab_pulp, tab_sim, tab_model, tab_doc = st.tabs(
+    ["Risultato", "Calcolo vincite", "Confronto", "Verifica ILP", "ILP con PuLP", "Simulazione", "Modello",
+     "Documentazione"])
 
 # ------------------------------------------------------------------ tab Risultato
 with tab_res:
@@ -601,3 +603,31 @@ with tab_model:
                         "vicino non sia a sua volta giocato. Orari di raccolta e modalità di compilazione non "
                         "incidono sul calcolo."),
     ])
+
+# ------------------------------------------------------------------ tab Documentazione
+DOC_PATH = Path(__file__).with_name("DOCUMENTAZIONE.md")
+
+
+@st.cache_data(show_spinner=False)
+def doc_sections(text: str) -> tuple[str, str, list[tuple[str, str]]]:
+    """Titolo, sottotitolo e capitoli (titolo ##, corpo markdown) della documentazione."""
+    head, *chapters = re.split(r"^## ", text, flags=re.M)
+    lines = [ln for ln in head.strip().splitlines() if ln.strip()]
+    title = lines[0].lstrip("# ").strip() if lines else ""
+    byline = " ".join(lines[1:])
+    return title, byline, [(c.split("\n", 1)[0].strip(), c.split("\n", 1)[1].strip()) for c in chapters]
+
+
+with tab_doc:
+    if not DOC_PATH.exists():
+        style.error_card("Documentazione non trovata: manca DOCUMENTAZIONE.md accanto ad app.py.")
+    else:
+        doc_title, doc_by, chapters = doc_sections(DOC_PATH.read_text(encoding="utf-8"))
+        with style.card("doc-head"):
+            style.title(doc_title)
+            if doc_by:
+                st.caption(doc_by)
+        for i, (heading, body) in enumerate(chapters):
+            with style.card(f"doc-{i}"):
+                style.title(heading)
+                st.markdown(body)

@@ -90,7 +90,7 @@ section[data-testid="stSidebar"] div:has(> [data-testid="stSidebarResizeHandle"]
   border-radius: var(--radius-lg); overflow: visible; }}
 .stTabs [data-baseweb="tab-list"]::before, .stTabs [role="tablist"]::before {{ content: "{BRAND}";
   margin-right: auto; padding-right: 16px; font-size: 18px; font-weight: 800; letter-spacing: -0.015em; color: {DEEP}; }}
-.stTabs [data-baseweb="tab"], .stTabs [role="tab"] {{ height: auto; padding: 8px 14px; margin: 0; border: 0;
+.stTabs [data-baseweb="tab"], .stTabs [role="tab"] {{ height: auto; padding: 8px 10px; margin: 0; border: 0;
   border-radius: 999px; background: transparent; cursor: pointer; }}
 .stTabs [role="tab"] p {{ font-size: 14px; font-weight: 600; color: {DEEP}; }}
 .stTabs [role="tab"]:hover p {{ color: {ORANGE}; }}
@@ -104,6 +104,16 @@ section[data-testid="stSidebar"] div:has(> [data-testid="stSidebarResizeHandle"]
 [class*="st-key-card"] {{ position: relative; background: #fff; border: 1px solid transparent; border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft); padding: 24px; gap: 12px !important; }}
 .x-title {{ margin: 0; font-size: 20px; line-height: 1.25; font-weight: 800; letter-spacing: -0.015em; color: {DEEP}; }}
+/* documentazione: testo uniforme, sottotitoli piu' piccoli del titolo della scheda, tabelle come .x-table */
+[class*="st-key-card-doc-"] p, [class*="st-key-card-doc-"] li {{ font-size: 15px; line-height: 1.6; }}
+[class*="st-key-card-doc-"] h3 {{ font-size: 17px; margin: 22px 0 2px; padding: 0; }}
+[class*="st-key-card-doc-"] table {{ border-collapse: collapse; font-size: 14px; margin: 4px 0 8px; }}
+[class*="st-key-card-doc-"] th, [class*="st-key-card-doc-"] td {{ border: 0; padding: 8px 10px; font-size: 14px;
+  vertical-align: top; }}
+[class*="st-key-card-doc-"] th {{ font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: {N700};
+  font-weight: 600; }}
+[class*="st-key-card-doc-"] tbody tr:nth-child(odd) td {{ background: {N100}; }}
+[class*="st-key-card-doc-"] .katex-display {{ margin: 14px 0; }}
 [class*="st-key-card"] p {{ font-size: 14px; }}
 [class*="st-key-card"] [data-testid="stCaptionContainer"] p {{ font-size: 13px; color: {N700}; }}
 [class*="st-key-card"] [data-testid="stPlotlyChart"] {{ border-radius: var(--radius-md); overflow: hidden; }}
