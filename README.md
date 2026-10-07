@@ -44,7 +44,7 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 | `app.py` | Interfaccia Streamlit |
 | `tests/test_core.py` | 38 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione |
 | `tests/test_ilp_pulp.py` | 11 test: ottimo PuLP = Turán, metriche identiche a `core.py` |
-| `tests/test_regole.py` | 39 test: regole di gioco e calcolo vincite, ritenuta e concorsi nel modello |
+| `tests/test_regole.py` | 43 test: regole di gioco e calcolo vincite (anche su più scontrini), ritenuta e concorsi nel modello |
 
 ## Interfaccia
 

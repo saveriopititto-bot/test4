@@ -164,3 +164,37 @@ def test_sistema_vs_calcolatore():
     g = [r.Giocata((a + 1, b + 1), {r.AMBO: 1}, ("Bari",)) for a, b in d.edges]
     e = r.calcola_vincita(g, estr)
     assert e.netto == pytest.approx(3 * analyze(d, stake=1, tax=r.RITENUTA).win_value)
+
+
+# ------------------------------------------------------------------ piu' scontrini
+def test_dividi_in_scontrini_rispetta_il_massimo():
+    g = [r.Giocata((i, i + 1), {r.AMBO: 30}) for i in range(1, 20, 2)]   # 10 x 30 = 300 EUR
+    sc = r.dividi_in_scontrini(g)
+    assert sorted(i for s in sc for i in s) == list(range(len(g)))
+    assert all(sum(g[i].importo for i in s) <= r.IMPORTO_MAX for s in sc)
+    assert len(sc) == 2
+
+
+def test_giocata_oltre_il_massimo():
+    g = [r.Giocata((1, 2, 3, 4, 5), {r.CINQUINA: 150, r.AMBO: 100})]
+    with pytest.raises(ValueError, match="oltre il massimo"):
+        r.dividi_in_scontrini(g)
+
+
+def test_tetto_per_scontrino():
+    """Cinquina da 200 EUR + ambi: il tetto vale per ogni scontrino, non sul totale."""
+    estr = {"Bari": (1, 2, 3, 4, 5)}
+    g = [r.Giocata((1, 2, 3, 4, 5), {r.CINQUINA: 200})] + \
+        [r.Giocata((a, b), {r.AMBO: 1}) for a, b in [(1, 2), (3, 4), (2, 5)]]
+    esiti = r.calcola_vincita_scontrini(g, estr, ritenuta=0)
+    assert len(esiti) == 2
+    assert sum(e.lordo_pagabile for e in esiti) == pytest.approx(r.VINCITA_MAX_SCONTRINO + 3 * 250)
+    # un solo scontrino (vecchio comportamento) avrebbe pagato solo il tetto
+    assert r.calcola_vincita(g, estr, ritenuta=0).lordo_pagabile == r.VINCITA_MAX_SCONTRINO
+
+
+def test_un_solo_scontrino_coincide():
+    g = [r.Giocata((10, 21), {r.AMBO: 1}), r.Giocata((10, 20), {r.AMBETTO: 1})]
+    (unico,) = r.calcola_vincita_scontrini(g, BARI)
+    assert unico.netto == pytest.approx(r.calcola_vincita(g, BARI).netto)
+    assert unico.giocate == (0, 1)

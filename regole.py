@@ -191,6 +191,7 @@ class EsitoScontrino:
     ritenuta: float
     netto: float
     importo: float
+    giocate: tuple[int, ...] = ()  # indici delle giocate stampate su questo scontrino
 
 
 def _euro(x: float) -> str:
@@ -231,18 +232,51 @@ def vincita_lorda_giocata(g: Giocata, estrazione: Mapping[str, Sequence[int]],
     return righe
 
 
-def calcola_vincita(giocate: Sequence[Giocata], estrazione: Mapping[str, Sequence[int]],
-                    ritenuta: float = RITENUTA) -> EsitoScontrino:
-    """Vincita di uno scontrino su un concorso: tetto di 6 milioni, poi ritenuta."""
-    valida_estrazione(estrazione)
-    righe: list[RigaVincita] = []
-    for i, g in enumerate(giocate):
-        righe += vincita_lorda_giocata(g, estrazione, i)
+def _esito(giocate: Sequence[Giocata], indici: Sequence[int], estrazione: Mapping[str, Sequence[int]],
+           ritenuta: float) -> EsitoScontrino:
+    righe = [r for i in indici for r in vincita_lorda_giocata(giocate[i], estrazione, i)]
     lordo = sum(r.lordo for r in righe)
     pagabile = min(lordo, VINCITA_MAX_SCONTRINO)
     trattenuta = pagabile * ritenuta
     return EsitoScontrino(tuple(righe), lordo, pagabile, trattenuta, pagabile - trattenuta,
-                          sum(g.importo for g in giocate))
+                          sum(giocate[i].importo for i in indici), tuple(indici))
+
+
+def calcola_vincita(giocate: Sequence[Giocata], estrazione: Mapping[str, Sequence[int]],
+                    ritenuta: float = RITENUTA) -> EsitoScontrino:
+    """Vincita di UNO scontrino su un concorso: tetto di 6 milioni, poi ritenuta."""
+    valida_estrazione(estrazione)
+    return _esito(giocate, range(len(giocate)), estrazione, ritenuta)
+
+
+def dividi_in_scontrini(giocate: Sequence[Giocata]) -> list[list[int]]:
+    """Ripartisce le giocate in scontrini da al massimo 200 EUR (first-fit decrescente).
+
+    Ogni giocata resta intera su un solo scontrino; una giocata da sola oltre i 200 EUR non e' valida.
+    """
+    scontrini: list[list[int]] = []
+    totali: list[float] = []
+    for i in sorted(range(len(giocate)), key=lambda i: -giocate[i].importo):
+        imp = giocate[i].importo
+        if imp > IMPORTO_MAX + 1e-9:
+            raise ValueError(f"La giocata {i + 1} costa {_euro(imp)}: oltre il massimo di "
+                             f"{_euro(IMPORTO_MAX)} per scontrino")
+        for j, tot in enumerate(totali):
+            if tot + imp <= IMPORTO_MAX + 1e-9:
+                scontrini[j].append(i)
+                totali[j] += imp
+                break
+        else:
+            scontrini.append([i])
+            totali.append(imp)
+    return [sorted(sc) for sc in scontrini]
+
+
+def calcola_vincita_scontrini(giocate: Sequence[Giocata], estrazione: Mapping[str, Sequence[int]],
+                              ritenuta: float = RITENUTA) -> list[EsitoScontrino]:
+    """Divide le giocate in scontrini da al massimo 200 EUR e applica tetto e ritenuta a ciascuno."""
+    valida_estrazione(estrazione)
+    return [_esito(giocate, sc, estrazione, ritenuta) for sc in dividi_in_scontrini(giocate)]
 
 
 def valida_estrazione(estrazione: Mapping[str, Sequence[int]]) -> None:

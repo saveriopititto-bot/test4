@@ -7,7 +7,7 @@ from typing import Sequence
 import numpy as np
 import plotly.graph_objects as go
 
-from core import Design, Stats
+from core import Design
 
 # palette 1a
 DEEP = "#023047"        # deep space blue
@@ -100,18 +100,6 @@ def graph_figure(design: Design, labels: Sequence[int]) -> go.Figure:
             hovertext=[f"numero {labels[v]}" for v in nodes], hoverinfo="text"))
     _base_layout(fig, showlegend=False, height=360, margin=dict(l=20, r=20, t=20, b=20))
     fig.update_layout(xaxis=dict(visible=False, scaleanchor="y"), yaxis=dict(visible=False))
-    return fig
-
-
-def pmf_figure(stats: Stats) -> go.Figure:
-    j = [i for i, p in enumerate(stats.pmf) if i >= 1 and p > 0]
-    fig = go.Figure(go.Bar(
-        x=j, y=[stats.pmf[i] * 100 for i in j], marker_color=ACCENT, marker_cornerradius=6,
-        hovertemplate="%{x} ambi vincenti<br>%{y:.5f}%<extra></extra>"))
-    _base_layout(fig, height=300, margin=dict(l=0, r=0, t=10, b=0))
-    fig.update_layout(
-        xaxis=dict(title="Ambi vincenti nell'estrazione", dtick=1),
-        yaxis=dict(title="Probabilità (%)", type="log"))
     return fig
 
 
