@@ -155,9 +155,6 @@ div[data-testid="stMetricValue"], div[data-testid="stMetricValue"] * {{ font-wei
 .x-kcard {{ background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 24px; }}
 .x-kcard p {{ margin: 8px 0 0; font-size: 15px; text-wrap: pretty; }}
 .x-kgrid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }}
-.x-hist {{ display: grid; grid-template-columns: 90px minmax(0, 1fr) 110px; gap: 12px; align-items: center;
-  font-size: 13px; font-variant-numeric: tabular-nums; max-width: 640px; }}
-.x-hist .x-bar {{ height: 12px; }}
 </style>
 """
 

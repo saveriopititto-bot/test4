@@ -23,6 +23,7 @@ st.set_page_config(page_title="Sistemi ridotti per ambi", page_icon="🎯", layo
 style.apply_style()
 
 PLOTLY_CONFIG = {"displayModeBar": False}
+MAX_DIST_ROWS = 30  # oltre, la distribuzione si mostra a fasce
 
 
 # ------------------------------------------------------------------ formattazione
@@ -181,19 +182,32 @@ with tab_res:
                        + ", ".join(str(s) for s in sizes) + ".")
         with right, style.card("dist"):
             style.title("Distribuzione dell'esito")
-            nz = [(j, p) for j, p in enumerate(stats.pmf) if p > 1e-12]
-            lo = min(math.log10(p) for _, p in nz) - 0.6
+            # righe (da, a, probabilita'): una per valore, o fasce di pari ampiezza se i valori sono troppi
+            nz = [j for j, p in enumerate(stats.pmf) if p > 1e-12]
+            j_lo, j_hi = nz[0], nz[-1]
+            step = max(1, math.ceil((j_hi - j_lo + 1) / MAX_DIST_ROWS))
+            bands = [(a, min(a + step - 1, j_hi), float(stats.pmf[a:a + step].sum()))
+                     for a in range(j_lo, j_hi + 1, step)]
+            bands = [b for b in bands if b[2] > 1e-12]
+            lo = min(math.log10(p) for *_, p in bands) - 0.6
+
+            def rng(a: int, b: int, f) -> str:
+                return f(a) if a == b else f"{f(a)} – {f(b)}"
+
             rows = []
-            for j, p in nz:
-                net = j * stats.win_value - stats.cost
-                net_color = style.DEEP if net > 0 else style.A700
+            for a, b, p in bands:
+                net_color = style.DEEP if a * stats.win_value - stats.cost > 0 else style.A700
                 width = max(2.0, (math.log10(p) - lo) / -lo * 100)
-                rows.append([str(j), eur(j * stake * payout), f'<span style="color:{net_color}">{eur(net)}</span>',
+                rows.append([rng(a, b, str), rng(a, b, lambda j: eur(j * stake * payout)),
+                             f'<span style="color:{net_color}">'
+                             f'{rng(a, b, lambda j: eur(j * stats.win_value - stats.cost))}</span>',
                              pct(p * 100, 4),
                              f'<div style="display:flex;flex-direction:column;gap:4px">{style.bar(width)}'
                              f'<span style="font-size:12px">{one_in(p)}</span></div>'])
             style.table(["Ambi", "Vincita lorda", "Saldo netto", "Probabilità", "Frequenza (scala log)"],
                         rows, {4: "34%"})
+            if step > 1:
+                st.caption(f"Valori raggruppati in fasce di {step} ambi vincenti (probabilità sommate).")
             if regole.tetto_mai_raggiunto_ambo():
                 st.caption(f"Saldo dopo la ritenuta. Con sole puntate su ambo uno scontrino vince al massimo "
                            f"{eur(regole.COEFFICIENTI[regole.AMBO] * regole.IMPORTO_MAX)}: il tetto di "
@@ -285,26 +299,41 @@ with tab_win:
                     style.error_card(f"Giocata libera non valida: {e}")
 
     if giocate and estrazione:
-        imp = sum(g.importo for g in giocate)
-        esito = regole.calcola_vincita(giocate, estrazione, ritenuta=tax)
         with style.card("win_result"):
             style.title("Esito")
-            for e in regole.valida_importo(imp):
-                style.error_card(f"{e} (importo dello scontrino: {eur(imp)}).")
-            style.metrics([
-                ("Importo", eur(esito.importo), f"{len(giocate)} giocate"),
-                ("Vincita lorda", eur(esito.lordo), f"{len(esito.righe)} righe vincenti"),
-                ("Dopo il tetto", eur(esito.lordo_pagabile), f"max {eur(regole.VINCITA_MAX_SCONTRINO)}"),
-                (f"Ritenuta {tax:.0%}", eur(esito.ritenuta), "sulle vincite"),
-                ("Vincita netta", eur(esito.netto), f"saldo {eur(esito.netto - esito.importo)}"),
-            ])
-            if esito.righe:
-                style.table(["Giocata", "Numeri", "Ruota", "Sorte", "Combinazioni vincenti", "Vincita lorda"],
-                            [[str(r_.giocata + 1), "-".join(map(str, giocate[r_.giocata].numeri)), r_.ruota,
-                              SORTI_LABEL[r_.sorte], f"{r_.vincenti} su {r_.combinazioni}", eur(r_.lordo)]
-                             for r_ in esito.righe])
-            else:
-                st.markdown("Nessuna combinazione vincente.")
+            try:
+                esiti = regole.calcola_vincita_scontrini(giocate, estrazione, ritenuta=tax)
+            except ValueError as e:
+                esiti = []
+                style.error_card(str(e))
+            for n_, es in enumerate(esiti, 1):
+                for e in regole.valida_importo(es.importo):
+                    style.error_card(f"Scontrino {n_}: {e} (importo {eur(es.importo)}).")
+            if esiti:
+                imp = sum(es.importo for es in esiti)
+                lordo = sum(es.lordo for es in esiti)
+                pagabile = sum(es.lordo_pagabile for es in esiti)
+                netto = sum(es.netto for es in esiti)
+                righe = [(n_, r_) for n_, es in enumerate(esiti, 1) for r_ in es.righe]
+                style.metrics([
+                    ("Importo", eur(imp), f"{len(giocate)} giocate su {len(esiti)} scontrini"
+                     if len(esiti) > 1 else f"{len(giocate)} giocate"),
+                    ("Vincita lorda", eur(lordo), f"{len(righe)} righe vincenti"),
+                    ("Dopo il tetto", eur(pagabile), f"max {eur(regole.VINCITA_MAX_SCONTRINO)} per scontrino"),
+                    (f"Ritenuta {tax:.0%}", eur(sum(es.ritenuta for es in esiti)), "sulle vincite"),
+                    ("Vincita netta", eur(netto), f"saldo {eur(netto - imp)}"),
+                ])
+                if len(esiti) > 1:
+                    st.caption(f"Oltre {eur(regole.IMPORTO_MAX)} le giocate vanno su più scontrini: tetto e "
+                               "ritenuta si applicano a ciascuno.")
+                if righe:
+                    style.table(["Scontrino", "Giocata", "Numeri", "Ruota", "Sorte", "Combinazioni vincenti",
+                                 "Vincita lorda"],
+                                [[str(n_), str(r_.giocata + 1), "-".join(map(str, giocate[r_.giocata].numeri)),
+                                  r_.ruota, SORTI_LABEL[r_.sorte], f"{r_.vincenti} su {r_.combinazioni}",
+                                  eur(r_.lordo)] for n_, r_ in righe])
+                else:
+                    st.markdown("Nessuna combinazione vincente.")
     elif not giocate:
         st.caption("Includi il sistema o aggiungi una giocata per calcolare le vincite.")
 
