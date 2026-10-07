@@ -102,19 +102,20 @@ Esempio: con $k = 8$ e $t = 3$ i due gruppi da 4 diventano da 23 e se ne aprono 
 
 ## Come funziona il codice
 
-Il progetto sono sei moduli Python in radice più una cartella di test. `core.py` contiene la matematica, `regole.py` le regole di gioco, e `app.py` li usa per costruire l'interfaccia.
+Il progetto sono sette moduli Python in radice più una cartella di test. `core.py` contiene la matematica, `regole.py` le regole di gioco, e `app.py` li usa per costruire l'interfaccia.
 
 | File | Cosa contiene |
 |---|---|
 | `core.py` | Design (grafo di ambi), costruzione di Turán, budget duale, distribuzione esatta (DP su cricche o enumerazione), statistiche, ILP con OR-Tools CP-SAT, Monte Carlo |
 | `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta: un controllo indipendente da `core.py`. Si può lanciare da solo con `python ilp_pulp.py` (esempio $k=6$, $t=3$) |
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
+| `ritardi.py` | Lettura del «tabellone analitico» dei ritardi caricato a mano: ritardo di ogni numero per ruota e classifiche |
 | `viz.py` | Grafici Plotly: grafo, frontiera costo/probabilità, saldo simulato |
 | `style.py` | Stile dell'interfaccia: CSS, schede arrotondate e blocchi HTML |
-| `app.py` | Interfaccia Streamlit: barra laterale, sei schede principali e cinque sottoschede in "Approfondimenti" |
+| `app.py` | Interfaccia Streamlit: barra laterale, sette schede principali e cinque sottoschede in "Approfondimenti" |
 | `DOCUMENTAZIONE.md` | Questa documentazione, mostrata anche in Approfondimenti → Documentazione |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
-| `tests/` | `test_core.py` (69 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
+| `tests/` | `test_core.py` (69 test), `test_ilp_pulp.py` (11), `test_regole.py` (43), `test_ritardi.py` (3) |
 
 ### Flusso di un calcolo
 
@@ -191,7 +192,7 @@ Vince ogni coppia estratta formata da un numero giocato e dal precedente o dal s
 
 ## L'interfaccia
 
-L'app ha una barra laterale per i parametri e sei schede che mostrano i risultati; gli strumenti di verifica sono raccolti nella scheda "Approfondimenti". Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
+L'app ha una barra laterale per i parametri e sette schede che mostrano i risultati; gli strumenti di verifica sono raccolti nella scheda "Approfondimenti". Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
 
 ### Barra laterale
 
@@ -228,6 +229,7 @@ La barra laterale è divisa in tre passi numerati più le opzioni avanzate.
 | Controlla una giocata | In tre passi: cosa giochi (il sistema ridotto e/o una giocata tua su qualsiasi sorte), l'estrazione (casuale, con un numero per cambiarla, o inserita a mano, solo per le ruote che giochi) e l'esito con le regole ufficiali, spiegato passaggio per passaggio |
 | Vincita certa | Quanti ambi aggiungere, sui numeri non ancora giocati, per vincere sempre almeno un ambo: costo in più, vincita minima, i gruppi da giocare (anche in CSV) e perché vincere sempre non vuol dire guadagnare |
 | Percorso minimo | Il modo più economico per arrivare alla vincita certa allargando anche i gruppi già giocati: ambi in più, risparmio rispetto a "Vincita certa", come allargare ogni gruppo (anche in CSV) |
+| Ritardatari | Carichi il «tabellone analitico» dei ritardi (file di testo, da scaricare a mano: i siti che lo pubblicano bloccano lo scaricamento automatico) e vedi i 10 numeri più in ritardo per ruota e in assoluto. Un pulsante usa i $k$ più in ritardo come «I tuoi numeri» |
 | Approfondimenti | Cinque sottoschede per chi vuole verificare i conti (sotto) |
 
 Le sottoschede di "Approfondimenti":
@@ -255,7 +257,7 @@ streamlit run app.py
 
 ### Test
 
-I 123 test passano tutti (69 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design, le regole di gioco e che vincita certa e percorso minimo usino davvero il minimo di ambi (confronto con la ricerca esaustiva su casi piccoli) e vincano sempre, e che le attese simulate prima di vincere tornino con la distribuzione geometrica.
+I 126 test passano tutti (69 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`, 3 per `ritardi.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design, le regole di gioco e che vincita certa e percorso minimo usino davvero il minimo di ambi (confronto con la ricerca esaustiva su casi piccoli) e vincano sempre, e che le attese simulate prima di vincere tornino con la distribuzione geometrica.
 
 ```bash
 pip install pytest
@@ -268,7 +270,7 @@ Il controllo con PuLP si può lanciare senza interfaccia: `python ilp_pulp.py` r
 
 ### Deploy su Streamlit Community Cloud
 
-1. Carica la cartella su un repository GitHub, con in radice `app.py`, `core.py`, `ilp_pulp.py`, `regole.py`, `style.py`, `viz.py`, `DOCUMENTAZIONE.md`, `requirements.txt` e `.streamlit/config.toml`.
+1. Carica la cartella su un repository GitHub, con in radice `app.py`, `core.py`, `ilp_pulp.py`, `regole.py`, `ritardi.py`, `style.py`, `viz.py`, `DOCUMENTAZIONE.md`, `requirements.txt` e `.streamlit/config.toml`.
 2. Su share.streamlit.io scegli *New app*, poi repository e branch, e come *Main file path* `app.py`.
 3. In *Advanced settings* scegli Python 3.12 o 3.13 e premi *Deploy*.
 
@@ -283,7 +285,7 @@ Vuoi giocare con 8 numeri e la garanzia di un ambo se ne escono 3 su una ruota. 
 L'app è uno strumento didattico e non una guida per vincere: il valore atteso resta negativo qualunque sistema si scelga.
 
 - **Estrazioni indipendenti.** Con più ruote o più concorsi si assume che le estrazioni siano indipendenti, per cui la distribuzione è una convoluzione.
-- **Quali numeri scegli è indifferente.** L'estrazione è uniforme, quindi conta solo la struttura del sistema, non i numeri.
+- **Quali numeri scegli è indifferente.** L'estrazione è uniforme, quindi conta solo la struttura del sistema, non i numeri. Vale anche per i ritardatari: un numero che manca da molte estrazioni ha la stessa probabilità di uscire di qualsiasi altro.
 - **Garanzia solo fino a $t = 5$.** Escono 5 numeri, quindi per $t \ge 6$ la garanzia non scatta mai.
 - **Ambetto semplificato.** Si assume la numerazione circolare e che il numero vicino non sia a sua volta giocato.
 - **Dimensioni massime.** Il sistema usa fino a 40 numeri; la modalità "Ho un budget e una garanzia" può salire fino a 90. L'enumerazione per grafi generici si ferma a 2,5 milioni di combinazioni, e i controlli ILP girano su $k$ fino a 14 (CP-SAT) e 12 (PuLP).
