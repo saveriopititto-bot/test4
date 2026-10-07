@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+import ilp_pulp
 import viz
 from core import (
     AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, Design, analyze, best_t_for_edges, complete_design,
@@ -108,8 +109,8 @@ if mode != MODE_1:
     st.success(f"Soluzione ottima: **k = {k} numeri, garanzia t = {t}**, {design.n_edges} ambi "
                f"({eur(stats.cost)} su {eur(budget)} di budget).")
 
-tab_res, tab_cmp, tab_ilp, tab_sim, tab_model = st.tabs(
-    ["Risultato", "Confronto", "Verifica ILP", "Simulazione", "Modello"])
+tab_res, tab_cmp, tab_ilp, tab_pulp, tab_sim, tab_model = st.tabs(
+    ["Risultato", "Confronto", "Verifica ILP", "ILP con PuLP", "Simulazione", "Modello"])
 
 # ------------------------------------------------------------------ tab Risultato
 with tab_res:
@@ -277,6 +278,57 @@ with tab_ilp:
                 c[2].metric("Perdita %", pct(s_ilp.loss_pct, 1))
                 with st.expander("Elenco ambi (numeri 1…k)"):
                     st.write(", ".join(f"{a + 1}-{b + 1}" for a, b in res.edges))
+
+# ------------------------------------------------------------------ tab PuLP
+with tab_pulp:
+    st.subheader("Sistema ridotto con PuLP (CBC)")
+    st.markdown("Stesso modello ILP risolto con **PuLP** e metriche calcolate per **enumerazione diretta** "
+                "dei sottoinsiemi estratti: un controllo indipendente dai calcoli del resto dell'app. "
+                "Le metriche si riferiscono a una ruota.")
+    if not ilp_pulp.pulp_available():
+        st.warning("PuLP con il solver CBC non è disponibile: `pip install \"pulp<4\"` "
+                   "(dalla 4.0 PuLP non include più CBC).")
+    else:
+        c = st.columns(3)
+        k_p = c[0].slider("k (numeri)", 4, 12, min(max(k, 4), 12), key="pulp_k")
+        t_p = c[1].slider("t (garanzia)", 2, min(N_DRAWN, k_p), min(t, k_p, N_DRAWN), key="pulp_t")
+        tl_p = c[2].number_input("Tempo max (s)", 5, 300, 30, step=5, key="pulp_tl")
+        st.caption(f"{comb(k_p, 2)} variabili, {comb(k_p, t_p)} vincoli.")
+        if st.button("Risolvi con PuLP", type="primary"):
+            with st.spinner("Calcolo in corso…"):
+                res_p = ilp_pulp.solve_ilp_lotto(k_p, t_p, time_limit=float(tl_p))
+                met = ilp_pulp.analizza_metriche_sistema(k_p, t_p, res_p.ambi, costo_per_ambo=stake, quota=payout)
+            st.session_state["pulp"] = (res_p, met)
+        if "pulp" in st.session_state:
+            res_p, met = st.session_state["pulp"]
+            st.markdown(f"**Ultimo risultato** — k={met.k}, t={met.t} (solver {res_p.solver})")
+            if not res_p.ambi:
+                st.error(f"Nessuna soluzione trovata (stato: {res_p.stato}).")
+            else:
+                c = st.columns(4)
+                c[0].metric("Stato", res_p.stato)
+                c[1].metric("Ambi (PuLP)", met.n_ambi)
+                c[2].metric("Ambi (Turán)", met.turan)
+                c[3].metric("Costo totale", eur(met.costo_totale))
+                if met.n_ambi == met.turan:
+                    st.success("✔ Il minimo trovato da PuLP coincide con la formula di Turán.")
+                else:
+                    st.warning("Valore diverso da Turán: soluzione non ottima entro il tempo limite.")
+                c = st.columns(4)
+                c[0].metric("P(garanzia scatta)", pct(met.prob_garanzia * 100, 4),
+                            help=f"{met.casi_garanzia:,} casi su {met.combinazioni_totali:,}".replace(",", "."))
+                c[1].metric("P(≥1 ambo) reale", pct(met.prob_vincita_reale * 100, 4),
+                            help=f"{met.casi_vincita_reale:,} casi su {met.combinazioni_totali:,}".replace(",", "."))
+                c[2].metric("Ritorno atteso", eur(met.ritorno_atteso))
+                c[3].metric("Perdita %", pct(met.perdita_pct, 2))
+                s_chk = analyze(make_design("PuLP", [(a - 1, b - 1) for a, b in res_p.ambi], met.k),
+                                stake=stake, payout=payout)
+                if abs(s_chk.p_win_any - met.prob_vincita_reale) < 1e-12:
+                    st.caption("✔ P(≥1 ambo) coincide con il calcolo esatto del resto dell'app.")
+                else:
+                    st.caption(f"⚠ P(≥1 ambo) diversa dal calcolo esatto ({pct(s_chk.p_win_any * 100, 4)}).")
+                with st.expander("Elenco ambi (numeri 1…k)"):
+                    st.write(", ".join(f"{a}-{b}" for a, b in res_p.ambi))
 
 # ------------------------------------------------------------------ tab Simulazione
 with tab_sim:

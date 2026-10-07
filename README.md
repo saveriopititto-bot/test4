@@ -23,11 +23,13 @@ pytest
 
 ## Deploy su Streamlit Community Cloud
 
-1. Carica la cartella su un repository GitHub (file in radice: `app.py`, `core.py`, `viz.py`, `requirements.txt`).
+1. Carica la cartella su un repository GitHub (file in radice: `app.py`, `core.py`, `ilp_pulp.py`, `viz.py`, `requirements.txt`).
 2. Su share.streamlit.io: *New app* → scegli repo e branch → *Main file path*: `app.py`.
 3. In *Advanced settings* scegli Python 3.12 (o 3.13) e premi *Deploy*.
 
-OR-Tools è usato solo nel tab "Verifica ILP": se l'import fallisce, il resto dell'app funziona comunque.
+OR-Tools è usato solo nel tab "Verifica ILP" e PuLP solo nel tab "ILP con PuLP": se uno dei due manca, il resto dell'app funziona comunque. PuLP è fissato a `<4` perché dalla 4.0 non include più il solver CBC.
+
+Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6, t=3).
 
 ## Struttura
 
@@ -35,8 +37,10 @@ OR-Tools è usato solo nel tab "Verifica ILP": se l'import fallisce, il resto de
 |---|---|
 | `core.py` | Turán, budget duale, distribuzione esatta (DP su cliche / enumerazione), statistiche, ILP CP-SAT, Monte Carlo |
 | `viz.py` | Grafici Plotly (grafo, distribuzione, frontiera, saldo simulato) |
+| `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta (controllo indipendente) |
 | `app.py` | Interfaccia Streamlit |
 | `tests/test_core.py` | 38 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione |
+| `tests/test_ilp_pulp.py` | 11 test: ottimo PuLP = Turán, metriche identiche a `core.py` |
 
 ## Modello in breve
 
