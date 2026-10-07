@@ -37,10 +37,20 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 |---|---|
 | `core.py` | Turán, budget duale, distribuzione esatta (DP su cliche / enumerazione), statistiche, ILP CP-SAT, Monte Carlo |
 | `viz.py` | Grafici Plotly (grafo, distribuzione, frontiera, saldo simulato) |
+| `style.py` | Stile dell'interfaccia (layout 1a): CSS, schede arrotondate e blocchi HTML |
+| `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
 | `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta (controllo indipendente) |
 | `app.py` | Interfaccia Streamlit |
 | `tests/test_core.py` | 38 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione |
 | `tests/test_ilp_pulp.py` | 11 test: ottimo PuLP = Turán, metriche identiche a `core.py` |
+
+## Interfaccia
+
+Layout "1a": barra di navigazione a pillole, barra laterale e sezioni come schede bianche arrotondate,
+palette sky blue `#8ecae6`, blue green `#219ebc`, deep space blue `#023047`, amber flame `#ffb703`,
+princeton orange `#fb8500`, font Archivo. Lo stile in `style.py` si aggancia ad attributi interni di
+Streamlit (`data-testid`, `role`), testati con Streamlit 1.65: se dopo un aggiornamento un elemento
+perde lo stile, va aggiornato il selettore.
 
 ## Modello in breve
 
