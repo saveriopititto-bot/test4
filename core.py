@@ -228,8 +228,8 @@ class Stats:
     stake: float
     wheels: int
     payout: float
-    cost: float
-    pmf: np.ndarray            # P(totale ambi vincenti = j), su tutte le ruote
+    cost: float                # importo totale (tutti i concorsi)
+    pmf: np.ndarray            # P(totale ambi vincenti = j), su tutte le ruote e i concorsi
     ev_return: float
     ev_net: float
     loss_pct: float
@@ -237,20 +237,38 @@ class Stats:
     p_win_any: float
     p_profit: float
     p_guarantee: float | None  # per singola ruota; None se il design non ha garanzia
+    tax: float = 0.0           # ritenuta sulle vincite (0,08 = 8%)
+    draws: int = 1             # concorsi giocati (abbonamento)
+
+    @property
+    def win_value(self) -> float:
+        """Incasso netto (dopo la ritenuta) per ogni ambo vincente."""
+        return self.stake * self.payout * (1 - self.tax)
 
     @property
     def net_values(self) -> np.ndarray:
-        return np.arange(len(self.pmf)) * self.stake * self.payout - self.cost
+        return np.arange(len(self.pmf)) * self.win_value - self.cost
+
+
+def _pmf_power(pmf: np.ndarray, n: int) -> np.ndarray:
+    """Distribuzione della somma di n copie indipendenti (convoluzione per quadrature successive)."""
+    out = np.array([1.0])
+    base = pmf
+    while n:
+        if n & 1:
+            out = np.convolve(out, base)
+        n >>= 1
+        if n:
+            base = np.convolve(base, base)
+    return out
 
 
 def analyze(design: Design, t: int | None = None, stake: float = 1.0, wheels: int = 1,
-            payout: float = AMBO_PAYOUT) -> Stats:
-    pmf1 = wins_pmf(design)
-    pmf = pmf1
-    for _ in range(wheels - 1):
-        pmf = np.convolve(pmf, pmf1)
-    cost = design.n_edges * stake * wheels
-    net = np.arange(len(pmf)) * stake * payout - cost
+            payout: float = AMBO_PAYOUT, tax: float = 0.0, draws: int = 1) -> Stats:
+    """Statistiche su `wheels` ruote e `draws` concorsi indipendenti; `tax` = ritenuta sulle vincite."""
+    pmf = _pmf_power(wins_pmf(design), wheels * draws)
+    cost = design.n_edges * stake * wheels * draws
+    net = np.arange(len(pmf)) * stake * payout * (1 - tax) - cost
     ev_net = float((pmf * net).sum())
     ev_return = ev_net + cost
     var = float((pmf * net ** 2).sum()) - ev_net ** 2
@@ -262,12 +280,14 @@ def analyze(design: Design, t: int | None = None, stake: float = 1.0, wheels: in
         p_win_any=float(1.0 - pmf[0]),
         p_profit=float(pmf[net > 1e-9].sum()),
         p_guarantee=p_guarantee(design.k, t) if t is not None else None,
+        tax=tax, draws=draws,
     )
 
 
-def theoretical_ev_return(n_edges: int, stake: float, wheels: int, payout: float) -> float:
+def theoretical_ev_return(n_edges: int, stake: float, wheels: int, payout: float,
+                          tax: float = 0.0, draws: int = 1) -> float:
     """EV del ritorno per linearita': identico per qualsiasi design con n_edges ambi."""
-    return n_edges * stake * wheels * payout * P_AMBO
+    return n_edges * stake * wheels * draws * payout * (1 - tax) * P_AMBO
 
 
 # --------------------------------------------------------------------------- #
