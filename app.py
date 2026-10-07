@@ -18,7 +18,7 @@ import viz
 from core import (
     AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, Design, analyze, best_t_for_edges, certain_win_design,
     certain_win_extension, complete_design, minimal_path, minimal_path_design, make_design, matching_design, max_edges_for_budget,
-    max_k_for_edges, ortools_available, simulate_wins, solve_ilp, turan_design, turan_min_edges,
+    max_k_for_edges, ortools_available, draws_until_first, waiting_gaps, simulate_wins, solve_ilp, turan_design, turan_min_edges,
 )
 
 st.set_page_config(page_title="Come perdere al lotto", page_icon="🎯", layout="wide")
@@ -771,8 +771,15 @@ with tab_sim:
                     W = run_sim(design.edges, k, n_draws, wheels, seed)
                 net = W * stats1.win_value - stats1.cost
                 se = net.std(ddof=1) / np.sqrt(len(net))
+                waits = {}
+                for name_, hits_ in (("win", W >= 1), ("profit", net > 1e-9)):
+                    g_ = waiting_gaps(hits_)
+                    waits[name_] = None if len(g_) == 0 else {
+                        "first": int(g_[0]), "mean": float(g_.mean()), "median": int(np.median(g_)),
+                        "q90": int(np.ceil(np.quantile(g_, 0.9))), "count": int(len(g_))}
                 st.session_state["sim"] = {
                     "key": sim_key, "n": n_draws, "ev": stats1.ev_net, "path": net[:min(n_draws, 5000)],
+                    "waits": waits,
                     "rows": [
                         ["P(≥ 1 ambo)", pct((W >= 1).mean() * 100), pct(stats1.p_win_any * 100)],
                         ["P(profitto)", pct((net > 1e-9).mean() * 100), pct(stats1.p_profit * 100)],
@@ -789,6 +796,65 @@ with tab_sim:
                 shown, total = _it(f"{len(sim['path']):,}"), _it(f"{sim['n']:,}")
                 st.caption(f"Saldo cumulato sulle prime {shown} di {total} estrazioni: "
                            "oscilla, ma la tendenza è quella attesa.")
+
+        def n_it(x: float) -> str:
+            return _it(f"{x:,.0f}")
+
+        def mean_it(x: float) -> str:
+            """Attesa media: un decimale sotto le 10 estrazioni, altrimenti intera."""
+            return _it(f"{x:,.1f}") if x < 10 else n_it(x)
+
+        def as_time(n_draws_: float) -> str:
+            weeks = n_draws_ / regole.ESTRAZIONI_SETTIMANA
+            if weeks < 1:
+                return "meno di una settimana"
+            if weeks < 52:
+                return f"circa {n_it(weeks)} settimane" if round(weeks) != 1 else "circa una settimana"
+            years = weeks / 52
+            return f"circa {_it(f'{years:,.1f}')} anni"
+
+        wait_win = draws_until_first(stats1.p_win_any)
+        wait_profit = draws_until_first(stats1.p_profit)
+        with style.card("sim_wait"):
+            style.title("Quanto aspetti prima di vincere")
+            if wait_win is None:
+                st.markdown("Con questo sistema non si vince mai un ambo.")
+            else:
+                style.lead(
+                    f"In media servono <strong>{mean_it(wait_win.mean)} estrazioni</strong> per vincere almeno un ambo "
+                    f"({as_time(wait_win.mean)} con {regole.ESTRAZIONI_SETTIMANA} estrazioni a settimana), "
+                    f"spendendo nel frattempo circa <strong>{eur(wait_win.mean * stats1.cost)}</strong>. "
+                    f"Metà delle volte basta aspettare <strong>{n_it(wait_win.median)}</strong> estrazioni, "
+                    f"9 volte su 10 al massimo <strong>{n_it(wait_win.q90)}</strong>.")
+                rows_w = []
+                for label_, w_, key_ in (("Vincere almeno un ambo", wait_win, "win"),
+                                         ("Chiudere un'estrazione in attivo", wait_profit, "profit")):
+                    if w_ is None:
+                        rows_w.append([label_, "mai", "—", "—", "—"])
+                        continue
+                    rows_w.append([label_, pct(w_.p * 100, 3), mean_it(w_.mean), n_it(w_.median), n_it(w_.q90)])
+                style.table(["Obiettivo", "Probabilità per estrazione", "Attesa media", "Metà delle volte entro",
+                             "9 volte su 10 entro"], rows_w)
+                st.caption("Estrazioni contate fino a quella vincente compresa (distribuzione geometrica: "
+                           "attesa media = 1 / probabilità). Ogni estrazione è indipendente: aver aspettato "
+                           "a lungo non rende più vicina la vincita.")
+                sim = st.session_state.get("sim")
+                if sim is not None and sim.get("waits") and sim["key"] == sim_key:
+                    rows_s = []
+                    for label_, w_, key_ in (("Vincere almeno un ambo", wait_win, "win"),
+                                             ("Chiudere un'estrazione in attivo", wait_profit, "profit")):
+                        o_ = sim["waits"].get(key_)
+                        if o_ is None:
+                            rows_s.append([label_, "mai", "—", "—", "—", "0"])
+                        else:
+                            rows_s.append([label_, n_it(o_["first"]), mean_it(o_["mean"]) if w_ is None else
+                                           f"{mean_it(o_['mean'])} (esatta {mean_it(w_.mean)})", n_it(o_["median"]),
+                                           n_it(o_["q90"]), n_it(o_["count"])])
+                    st.markdown("**Nella simulazione**")
+                    style.table(["Obiettivo", "Prima volta all'estrazione", "Attesa media", "Metà delle volte entro",
+                                 "9 volte su 10 entro", "Quante volte"], rows_s)
+                else:
+                    st.caption("Premi **Simula** qui sopra per confrontare questi valori con le attese osservate.")
 
 # ------------------------------------------------------------------ tab Modello
 with tab_model:

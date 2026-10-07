@@ -15,7 +15,7 @@ import importlib
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import chain, combinations
-from math import comb, floor, sqrt
+from math import ceil, comb, floor, log, log1p, sqrt
 from typing import Sequence
 
 import numpy as np
@@ -466,3 +466,38 @@ def simulate_wins(design: Design, n_draws: int, wheels: int = 1, seed: int = 0,
         out[pos:pos + c] = w
         pos += c
     return out.reshape(n_draws, wheels).sum(axis=1)
+
+
+# --------------------------------------------------------------------------- #
+# Attesa prima di vincere
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class Waiting:
+    """Estrazioni fino al primo successo compreso (distribuzione geometrica di parametro p)."""
+
+    p: float
+    mean: float     # 1/p
+    median: int     # meta' delle volte entro questo numero di estrazioni
+    q90: int        # 9 volte su 10 entro questo numero di estrazioni
+
+
+def draws_until_first(p: float) -> Waiting | None:
+    """Attesa del primo successo con probabilita' p per estrazione; None se p = 0 (non succede mai)."""
+    if not 0 <= p <= 1:
+        raise ValueError("p deve essere tra 0 e 1")
+    if p <= 0:
+        return None
+    if p >= 1:
+        return Waiting(1.0, 1.0, 1, 1)
+
+    def quantile(a: float) -> int:
+        # minimo n con P(attesa <= n) = 1 - (1-p)^n >= a
+        return max(1, ceil(log(1 - a) / log1p(-p) - 1e-9))
+
+    return Waiting(p, 1 / p, quantile(0.5), quantile(0.9))
+
+
+def waiting_gaps(hits: np.ndarray) -> np.ndarray:
+    """Attese osservate: estrazioni fino al primo successo, poi tra un successo e il successivo (inclusi)."""
+    idx = np.flatnonzero(np.asarray(hits)) + 1
+    return np.diff(idx, prepend=0)

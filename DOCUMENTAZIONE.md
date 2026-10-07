@@ -58,6 +58,18 @@ $$
 
 Per questo nessun design può cambiare la perdita media: può solo cambiarne la forma, cioè quanto spesso e quanto a lungo si vince.
 
+### Quanto si aspetta prima di vincere
+
+Se $p$ è la probabilità di vincere almeno un ambo in un'estrazione (sulle ruote giocate), le estrazioni $N$ fino alla prima vincita, compresa quella vincente, seguono una distribuzione geometrica:
+
+$$
+P(N = n) = (1-p)^{n-1}\, p, \qquad E[N] = \frac{1}{p}, \qquad n_a = \left\lceil \frac{\ln(1-a)}{\ln(1-p)} \right\rceil
+$$
+
+dove $n_a$ è il numero di estrazioni entro cui si vince con probabilità almeno $a$ (la mediana per $a = 0{,}5$, il 90° percentile per $a = 0{,}9$). In media si spendono quindi $E[N] \cdot \text{costo per estrazione}$ prima di vincere. Lo stesso vale per la prima estrazione chiusa in attivo, con $P(\text{profitto})$ al posto di $p$. Le estrazioni sono indipendenti: aver aspettato a lungo non avvicina la vincita.
+
+Esempio: con $k = 8$ e $t = 3$ su una ruota $p \approx 2{,}85\%$, quindi servono in media 35 estrazioni (circa 12 settimane con 3 estrazioni a settimana): metà delle volte ne bastano 24, 9 volte su 10 al massimo 80.
+
 ### Vincita certa
 
 Su una ruota escono 5 numeri, quindi si vince **sempre** almeno un ambo se ogni gruppo di 5 numeri contiene un ambo giocato, cioè se
@@ -102,7 +114,7 @@ Il progetto sono sei moduli Python in radice più una cartella di test. `core.py
 | `app.py` | Interfaccia Streamlit: barra laterale, sei schede principali e cinque sottoschede in "Approfondimenti" |
 | `DOCUMENTAZIONE.md` | Questa documentazione, mostrata anche in Approfondimenti → Documentazione |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
-| `tests/` | `test_core.py` (63 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
+| `tests/` | `test_core.py` (69 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
 
 ### Flusso di un calcolo
 
@@ -131,6 +143,8 @@ Streamlit riesegue `app.py` da capo a ogni modifica di un controllo. Ogni esecuz
 | `certain_win_design(k, t)` | Sistema completo per la vincita certa: quello di partenza più l'aggiunta, su tutti i 90 numeri |
 | `minimal_path(k, t)` | Percorso minimo verso la vincita certa allargando anche i gruppi già giocati (oggetto `MinimalPath`) |
 | `minimal_path_design(k, t)` | Sistema completo del percorso minimo, su tutti i 90 numeri |
+| `draws_until_first(p)` | Attesa del primo successo (geometrica): media, mediana e 90° percentile in estrazioni |
+| `waiting_gaps(hits)` | Attese osservate in una simulazione: fino al primo successo e tra un successo e il successivo |
 
 OR-Tools serve solo alla sottoscheda "Verifica ILP" e PuLP solo a "ILP con PuLP" (entrambe in "Approfondimenti"): se uno dei due manca, il resto dell'app funziona comunque.
 
@@ -220,7 +234,7 @@ Le sottoschede di "Approfondimenti":
 
 | Sottoscheda | Cosa mostra |
 |---|---|
-| Simulazione | Monte Carlo fino a 2 milioni di estrazioni, confrontato con i valori esatti, più il saldo cumulato |
+| Simulazione | Monte Carlo fino a 2 milioni di estrazioni, confrontato con i valori esatti, più il saldo cumulato. Calcola anche quante estrazioni servono prima di vincere (attesa media, mediana, 90° percentile, spesa e tempo con 3 estrazioni a settimana), sia esatte sia osservate nella simulazione |
 | Verifica ILP | Risolve l'ILP con CP-SAT ($k$ fino a 14) e lo confronta con Turán; permette anche di garantire $m \ge 2$ ambi |
 | ILP con PuLP | Stesso modello con PuLP/CBC ($k$ fino a 12) e metriche per enumerazione diretta, come controllo indipendente |
 | Come funziona | Riassunto teorico: setup, grafo, garanzia, ILP, Turán, distribuzione, valore atteso |
@@ -241,7 +255,7 @@ streamlit run app.py
 
 ### Test
 
-I 117 test passano tutti (63 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design, le regole di gioco e che vincita certa e percorso minimo usino davvero il minimo di ambi (confronto con la ricerca esaustiva su casi piccoli) e vincano sempre.
+I 123 test passano tutti (69 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design, le regole di gioco e che vincita certa e percorso minimo usino davvero il minimo di ambi (confronto con la ricerca esaustiva su casi piccoli) e vincano sempre, e che le attese simulate prima di vincere tornino con la distribuzione geometrica.
 
 ```bash
 pip install pytest
