@@ -44,7 +44,11 @@ section[data-testid="stSidebar"][aria-expanded="true"] {{ width: {SIDEBAR_W}px !
   min-width: {SIDEBAR_W}px !important; max-width: {SIDEBAR_W}px !important; }}
 section[data-testid="stSidebar"] > div {{ background: transparent; }}
 section[data-testid="stSidebar"] div:has(> [data-testid="stSidebarResizeHandle"]) {{ display: none; }}
-[data-testid="stSidebarContent"] {{ background: #fff; border-radius: var(--radius-lg); margin: 20px 0 20px 20px;
+/* su schermi stretti la barra laterale si apre sopra la pagina: sfondo pieno attorno alla scheda */
+@media (max-width: 767.98px) {{
+  section[data-testid="stSidebar"][aria-expanded="true"] {{ background: {BG}; box-shadow: 0 0 40px rgba(2,48,71,.18); }}
+}}
+section[data-testid="stSidebar"] > [data-testid="stSidebarContent"] {{ background: #fff; border-radius: var(--radius-lg); margin: 20px 0 20px 20px;
   box-shadow: var(--shadow-soft); width: calc(100% - 20px) !important; height: calc(100vh - 40px);
   padding: 0; overflow-x: hidden; overflow-y: auto; position: relative; }}
 [data-testid="stSidebarUserContent"] {{ padding: 16px 20px 14px; }}
