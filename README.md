@@ -25,7 +25,7 @@ pytest
 
 ## Deploy su Streamlit Community Cloud
 
-1. Carica la cartella su un repository GitHub (file in radice: `app.py`, `core.py`, `ilp_pulp.py`, `regole.py`, `style.py`, `viz.py`, `DOCUMENTAZIONE.md`, `requirements.txt`, `.streamlit/config.toml`).
+1. Carica la cartella su un repository GitHub (file in radice: `app.py`, `core.py`, `ilp_pulp.py`, `regole.py`, `ritardi.py`, `style.py`, `viz.py`, `DOCUMENTAZIONE.md`, `requirements.txt`, `.streamlit/config.toml`).
 2. Su share.streamlit.io: *New app* → scegli repo e branch → *Main file path*: `app.py`.
 3. In *Advanced settings* scegli Python 3.12 (o 3.13) e premi *Deploy*.
 
@@ -48,6 +48,8 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 | `tests/test_core.py` | 69 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione, attesa prima di vincere, vincita certa, percorso minimo |
 | `tests/test_ilp_pulp.py` | 11 test: ottimo PuLP = Turán, metriche identiche a `core.py` |
 | `tests/test_regole.py` | 43 test: regole di gioco e calcolo vincite (anche su più scontrini), ritenuta e concorsi nel modello |
+| `ritardi.py` | Lettura del tabellone dei ritardi caricato a mano (scheda Ritardatari) |
+| `tests/test_ritardi.py` | 3 test: lettura del tabellone, classifica dei ritardi, errori sul formato |
 
 ## Interfaccia
 
@@ -86,6 +88,14 @@ minimo possibile con i gruppi di partenza come vincolo (`minimal_path` in `core.
 su casi piccoli). Con k=8 e t=3 servono 956 ambi in più (968 in tutto) contro i 1.640 della scheda "Vincita
 certa". Se un gruppo di partenza è già più grande della media finale, non si può ridurre e il minimo assoluto
 di 968 non si raggiunge.
+
+## Ritardatari
+
+La scheda **Ritardatari** legge il «tabellone analitico» dei ritardi (file di testo con tabulazioni: una riga
+`Rit.` con le 11 ruote, poi una riga per ogni ritardo con 5 celle per ruota). Il file va caricato a mano: i siti
+che lo pubblicano sono protetti da controlli anti-bot e l'app non lo scarica da sola (`ritardi.py`). Mostra i
+10 numeri più in ritardo per ruota e in assoluto, e il pulsante «Usa i k più in ritardo» li inserisce in
+«I tuoi numeri». Le estrazioni sono indipendenti: un ritardo non cambia probabilità né perdita media.
 
 ## Regole di gioco applicate
 
