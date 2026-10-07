@@ -17,7 +17,7 @@ BG = "#eef6fa"
 N100, N200, N300, N400, N500, N700 = "#f2f8fb", "#e2eef4", "#c9dde7", "#a5c2d1", "#7c9fb2", "#3a5f74"
 A100, A600, A700 = "#fff3e6", "#e07600", "#a65600"
 
-BRAND = "Sistemi ridotti · Ambi al Lotto"
+BRAND = "Come perdere al lotto"
 SIDEBAR_W = 340  # larghezza fissa della barra laterale (scheda + 20px di margine sinistro)
 
 CSS = f"""

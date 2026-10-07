@@ -1,4 +1,4 @@
-"""Sistemi ridotti per ambi al Lotto — modello a grafo (app Streamlit, layout 1a)."""
+"""Come perdere al lotto: sistemi ridotti per ambi, modello a grafo (app Streamlit, layout 1a)."""
 from __future__ import annotations
 
 import math

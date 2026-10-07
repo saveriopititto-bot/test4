@@ -1,4 +1,6 @@
-# Sistemi ridotti per ambi al Lotto — modello a grafo
+# Come perdere al lotto
+
+Sistemi ridotti per ambi al Lotto, con un modello a grafo.
 
 App Streamlit didattica. Numeri scelti = nodi, ambi giocati = archi.
 Dato un livello di garanzia `t` (o un budget) calcola il sistema ridotto di costo minimo e mostra
