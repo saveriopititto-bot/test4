@@ -45,7 +45,7 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 | `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta (controllo indipendente) |
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `app.py` | Interfaccia Streamlit |
-| `tests/test_core.py` | 50 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione, vincita certa |
+| `tests/test_core.py` | 63 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione, vincita certa, percorso minimo |
 | `tests/test_ilp_pulp.py` | 11 test: ottimo PuLP = Turán, metriche identiche a `core.py` |
 | `tests/test_regole.py` | 43 test: regole di gioco e calcolo vincite (anche su più scontrini), ritenuta e concorsi nel modello |
 
@@ -76,6 +76,16 @@ quindi sui numeri liberi restano 5−t gruppi indipendenti e il minimo è ancora
 (`certain_win_extension` in `core.py`). Con t = 5 e numeri liberi non è possibile senza collegarli ai
 numeri già giocati. Partendo da zero basterebbero 968 ambi in tutto; mantenere separati i numeri già
 giocati costa di più. Anche con la vincita certa il saldo resta negativo: la perdita media non cambia.
+
+## Percorso minimo
+
+La scheda **Percorso minimo** toglie il vincolo di non toccare i numeri già giocati: i t−1 gruppi del sistema
+si allargano con numeri nuovi e se ne aprono altri 5−t, per un totale di al massimo 4 gruppi che coprono tutti
+i 90 numeri. Ogni numero libero va nel gruppo più piccolo (il costo C(n,2) è convesso), quindi il totale è il
+minimo possibile con i gruppi di partenza come vincolo (`minimal_path` in `core.py`, verificato a forza bruta
+su casi piccoli). Con k=8 e t=3 servono 956 ambi in più (968 in tutto) contro i 1.640 della scheda "Vincita
+certa". Se un gruppo di partenza è già più grande della media finale, non si può ridurre e il minimo assoluto
+di 968 non si raggiunge.
 
 ## Regole di gioco applicate
 
