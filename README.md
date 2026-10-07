@@ -45,7 +45,7 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 | `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta (controllo indipendente) |
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `app.py` | Interfaccia Streamlit |
-| `tests/test_core.py` | 63 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione, vincita certa, percorso minimo |
+| `tests/test_core.py` | 69 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione, attesa prima di vincere, vincita certa, percorso minimo |
 | `tests/test_ilp_pulp.py` | 11 test: ottimo PuLP = Turán, metriche identiche a `core.py` |
 | `tests/test_regole.py` | 43 test: regole di gioco e calcolo vincite (anche su più scontrini), ritenuta e concorsi nel modello |
 

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from core import (
+    draws_until_first, waiting_gaps,
     AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, _counts_by_enumeration, analyze, best_t_for_edges,
     certain_win_design, certain_win_extension, clique_sizes, complete_design, make_design, matching_design, max_edges_for_budget,
     max_k_for_edges, minimal_path, minimal_path_design, ortools_available, p_guarantee, simulate_wins, solve_ilp,
@@ -228,3 +229,37 @@ def test_minimal_path_values():
     assert mp.extra_edges <= certain_win_extension(8, 3).extra_edges
     assert minimal_path(60, 2).total_edges == 1905
     assert minimal_path(90, 3).extra_edges == 0   # tutti i numeri sono gia' tuoi: non serve aggiungere nulla
+
+
+# ------------------------------------------------------------------ attesa prima di vincere
+def test_draws_until_first_values():
+    w = draws_until_first(0.5)
+    assert (w.mean, w.median, w.q90) == (2.0, 1, 4)
+    w = draws_until_first(0.1)
+    assert w.mean == pytest.approx(10)
+    assert w.median == 7 and w.q90 == 22          # 1 - 0.9**7 = 0.52, 1 - 0.9**22 = 0.90
+    assert draws_until_first(1.0).median == 1
+    assert draws_until_first(0.0) is None
+    with pytest.raises(ValueError):
+        draws_until_first(1.5)
+
+
+@pytest.mark.parametrize("p", [0.003, 0.0285, 0.3])
+def test_draws_until_first_quantiles_are_minimal(p):
+    w = draws_until_first(p)
+    for n, a in ((w.median, 0.5), (w.q90, 0.9)):
+        assert 1 - (1 - p) ** n >= a > 1 - (1 - p) ** (n - 1)
+
+
+def test_waiting_gaps():
+    assert waiting_gaps(np.array([0, 0, 1, 0, 1, 1, 0])).tolist() == [3, 2, 1]
+    assert len(waiting_gaps(np.zeros(5, dtype=bool))) == 0
+
+
+def test_simulated_waits_match_geometric():
+    d = turan_design(8, 3)
+    W = simulate_wins(d, 300_000, seed=3)
+    gaps = waiting_gaps(W >= 1)
+    w = draws_until_first(analyze(d).p_win_any)
+    se = gaps.std(ddof=1) / np.sqrt(len(gaps))
+    assert abs(gaps.mean() - w.mean) < 4 * se

@@ -63,6 +63,7 @@ IMPORTO_MAX = 200.0
 VINCITA_MAX_SCONTRINO = 6_000_000.0
 RITENUTA = 0.08
 MAX_CONCORSI = 50
+ESTRAZIONI_SETTIMANA = 3  # martedi', giovedi' e sabato
 
 
 # --------------------------------------------------------------------------- #
