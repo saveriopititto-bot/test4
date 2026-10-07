@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import re
+from itertools import combinations
 from math import comb
 from pathlib import Path
 
@@ -15,9 +16,9 @@ import regole
 import style
 import viz
 from core import (
-    AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, Design, analyze, best_t_for_edges, complete_design,
-    make_design, matching_design, max_edges_for_budget, max_k_for_edges, ortools_available,
-    simulate_wins, solve_ilp, turan_design, turan_min_edges,
+    AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, Design, analyze, best_t_for_edges, certain_win_design,
+    certain_win_extension, complete_design, make_design, matching_design, max_edges_for_budget,
+    max_k_for_edges, ortools_available, simulate_wins, solve_ilp, turan_design, turan_min_edges,
 )
 
 st.set_page_config(page_title="Come perdere al lotto", page_icon="🎯", layout="wide")
@@ -175,8 +176,8 @@ def summary() -> None:
                     eur(stats.std_net), pct(stats.p_profit * 100), note)
 
 
-tab_res, tab_cmp, tab_win, tab_more = st.tabs(
-    ["Risultato", "Confronto", "Controlla una giocata", "Approfondimenti"])
+tab_res, tab_cmp, tab_win, tab_cert, tab_more = st.tabs(
+    ["Risultato", "Confronto", "Controlla una giocata", "Vincita certa", "Approfondimenti"])
 with tab_more:
     st.caption("Strumenti per chi vuole verificare i conti: simulazione, controlli con solver, spiegazione del "
                "modello e documentazione completa.")
@@ -258,69 +259,91 @@ def parse_list(text: str) -> list[int]:
     return [int(x) for x in re.split(r"[,\s;\-]+", text.strip()) if x]
 
 
+def ruote_usate(giocate: list[regole.Giocata]) -> tuple[str, ...]:
+    """Ruote su cui si gioca, senza doppioni e nell'ordine di comparsa."""
+    out: list[str] = []
+    for g_ in giocate:
+        out += [r_ for r_ in g_.ruote if r_ not in out]
+    return tuple(out)
+
+
 with tab_win:
-    with style.card("win_rules"):
-        style.title("Coefficienti ufficiali")
-        st.markdown("La posta di ogni sorte è divisa tra le combinazioni giocate e tra le ruote; i coefficienti "
-                    f"valgono per una singola ruota. Tetto di {eur(regole.VINCITA_MAX_SCONTRINO)} per scontrino, "
-                    f"poi ritenuta dell'{regole.RITENUTA:.0%}.")
-        style.table(["Sorte", "Coefficiente", "Ritorno medio per 1 €", "Con ritenuta"],
-                    [[SORTI_LABEL[s_], _it(f"{c_:,.3f}".rstrip("0").rstrip(".")),
-                      eur(regole.ritorno_atteso_per_euro(s_)),
-                      eur(regole.ritorno_atteso_per_euro(s_, regole.RITENUTA))]
-                     for s_, c_ in regole.COEFFICIENTI.items()])
+    st.caption("Tre passi: scegli cosa giochi, scegli l'estrazione e guarda quanto vinceresti con le regole ufficiali.")
 
-    estrazione: dict[str, tuple[int, ...]] = {}
-    with style.card("win_draw"):
-        style.title("Estrazione")
-        c = st.columns([1, 1], vertical_alignment="bottom")
-        src = c[0].radio("Numeri estratti", ["Casuale", "Inseriti a mano"], horizontal=True, key="win_src")
-        if src == "Casuale":
-            estrazione = regole.estrazione_casuale(int(c[1].number_input("Seed", 0, 1_000_000, 1, key="win_seed")))
-        else:
-            cols = st.columns(4)
-            for i, r_ in enumerate(regole.RUOTE):
-                txt = cols[i % 4].text_input(r_, key=f"win_e_{r_}", placeholder="5 numeri in ordine")
-                if txt.strip():
-                    try:
-                        estrazione[r_] = tuple(parse_list(txt))
-                    except ValueError:
-                        style.error_card(f"{r_}: inserisci solo numeri interi.")
-        try:
-            regole.valida_estrazione(estrazione)
-        except ValueError as e:
-            style.error_card(str(e))
-            estrazione = {}
-        if estrazione:
-            style.table(["Ruota", "1°", "2°", "3°", "4°", "5°"],
-                        [[r_, *map(str, v)] for r_, v in estrazione.items()])
-
+    # ---- 1 · cosa giochi
     giocate: list[regole.Giocata] = []
     with style.card("win_ticket"):
-        style.title("Scontrino")
-        if not err and st.checkbox(f"Includi il sistema ridotto ({design.n_edges} ambi, posta "
-                                   f"{eur(stake * wheels)} ciascuno, ruote: {ruote_txt})",
+        style.title("1 · Cosa giochi")
+        if not err and st.checkbox(f"Gioca il sistema ridotto ({design.n_edges} ambi, {eur(stake * wheels)} "
+                                   f"ciascuno, ruote: {ruote_txt})",
                                    value=design.n_edges <= 2000, key="win_sys"):
             giocate += [regole.Giocata((labels[a], labels[b]), {regole.AMBO: stake * wheels}, ruote)
                         for a, b in design.edges]
-        with st.expander("Aggiungi una giocata libera", expanded=not giocate):
-            c = st.columns([2, 2, 1])
-            nums_txt = c[0].text_input("Numeri (da 1 a 10)", key="win_nums", placeholder="es. 10, 20, 33")
-            r_sel = c[1].multiselect("Ruote", [regole.TUTTE, *regole.RUOTE], default=["Bari"], key="win_ruote")
-            pos = int(c[2].number_input("Posizione (estratto det.)", 1, regole.N_ESTRATTI, 1, key="win_pos"))
+        with st.expander("Aggiungi una giocata tua", expanded=not giocate):
+            c = st.columns(2)
+            nums_txt = c[0].text_input("I tuoi numeri (da 1 a 10)", key="win_nums", placeholder="es. 10, 20, 33")
+            r_sel = c[1].multiselect("Su quali ruote", [regole.TUTTE, *regole.RUOTE], default=["Bari"],
+                                     key="win_ruote")
+            st.caption("Quanto punti su ciascuna sorte (€). Lascia 0 le sorti che non giochi.")
             c = st.columns(4)
             poste = {s_: c[i % 4].number_input(f"{SORTI_LABEL[s_]} (€)", 0.0, regole.IMPORTO_MAX, 0.0, step=0.5,
                                                key=f"win_p_{s_}")
                      for i, s_ in enumerate(regole.COEFFICIENTI)}
+            pos = 1
+            if poste[regole.ESTRATTO_DETERMINATO] > 0:
+                pos = int(st.number_input("Posizione dell'estratto determinato (1° … 5°)", 1, regole.N_ESTRATTI, 1,
+                                          key="win_pos"))
             if nums_txt.strip() and any(poste.values()):
                 try:
                     giocate.append(regole.Giocata(tuple(parse_list(nums_txt)), poste, tuple(r_sel), posizione=pos))
                 except ValueError as e:
-                    style.error_card(f"Giocata libera non valida: {e}")
+                    style.error_card(f"Giocata non valida: {e}")
+        if not giocate:
+            st.caption("Spunta il sistema ridotto oppure aggiungi una giocata tua per continuare.")
 
-    if giocate and estrazione:
-        with style.card("win_result"):
-            style.title("Esito")
+    # ---- 2 · estrazione (solo per le ruote su cui si gioca)
+    estrazione: dict[str, tuple[int, ...]] = {}
+    with style.card("win_draw"):
+        style.title("2 · Estrazione")
+        if not giocate:
+            st.caption("Qui sceglierai l'estrazione per le ruote che giochi.")
+        else:
+            usate = ruote_usate(giocate)
+            c = st.columns(2, vertical_alignment="bottom")
+            src = c[0].radio("Numeri estratti", ["Casuale", "Inseriti a mano"], horizontal=True, key="win_src")
+            if src == "Casuale":
+                seed_ = int(c[1].number_input("Numero per cambiare estrazione", 0, 1_000_000, 1, key="win_seed",
+                                              help="Lo stesso numero dà sempre la stessa estrazione."))
+                estrazione = {r_: v for r_, v in regole.estrazione_casuale(seed_).items() if r_ in usate}
+            else:
+                st.caption("Scrivi i 5 numeri estratti per ogni ruota, separati da virgole.")
+                cols = st.columns(4)
+                for i, r_ in enumerate(usate):
+                    txt = cols[i % 4].text_input(r_, key=f"win_e_{r_}", placeholder="es. 3, 17, 25, 48, 90")
+                    if txt.strip():
+                        try:
+                            estrazione[r_] = tuple(parse_list(txt))
+                        except ValueError:
+                            style.error_card(f"{r_}: inserisci solo numeri interi.")
+                mancano = [r_ for r_ in usate if r_ not in estrazione]
+                if mancano:
+                    st.caption("Mancano i numeri per: " + ", ".join(mancano) + ".")
+                    estrazione = {}
+            try:
+                regole.valida_estrazione(estrazione)
+            except ValueError as e:
+                style.error_card(str(e))
+                estrazione = {}
+            if estrazione:
+                style.table(["Ruota", "1°", "2°", "3°", "4°", "5°"],
+                            [[r_, *map(str, v)] for r_, v in estrazione.items()])
+
+    # ---- 3 · esito
+    with style.card("win_result"):
+        style.title("3 · Esito")
+        if not giocate or not estrazione:
+            st.caption("Completa i passi 1 e 2 per vedere quanto vinceresti.")
+        else:
             try:
                 esiti = regole.calcola_vincita_scontrini(giocate, estrazione, ritenuta=tax)
             except ValueError as e:
@@ -333,29 +356,140 @@ with tab_win:
                 imp = sum(es.importo for es in esiti)
                 lordo = sum(es.lordo for es in esiti)
                 pagabile = sum(es.lordo_pagabile for es in esiti)
+                ritenuta_ = sum(es.ritenuta for es in esiti)
                 netto = sum(es.netto for es in esiti)
                 righe = [(n_, r_) for n_, es in enumerate(esiti, 1) for r_ in es.righe]
-                style.metrics([
-                    ("Importo", eur(imp), f"{len(giocate)} giocate su {len(esiti)} scontrini"
-                     if len(esiti) > 1 else f"{len(giocate)} giocate"),
-                    ("Vincita lorda", eur(lordo), f"{len(righe)} righe vincenti"),
-                    ("Dopo il tetto", eur(pagabile), f"max {eur(regole.VINCITA_MAX_SCONTRINO)} per scontrino"),
-                    (f"Ritenuta {tax:.0%}", eur(sum(es.ritenuta for es in esiti)), "sulle vincite"),
-                    ("Vincita netta", eur(netto), f"saldo {eur(netto - imp)}"),
-                ])
-                if len(esiti) > 1:
-                    st.caption(f"Oltre {eur(regole.IMPORTO_MAX)} le giocate vanno su più scontrini: tetto e "
-                               "ritenuta si applicano a ciascuno.")
                 if righe:
-                    style.table(["Scontrino", "Giocata", "Numeri", "Ruota", "Sorte", "Combinazioni vincenti",
-                                 "Vincita lorda"],
+                    style.lead(f"Con questa estrazione vinci <strong>{eur(netto)}</strong> netti su "
+                               f"<strong>{eur(imp)}</strong> giocati: saldo <strong>{eur(netto - imp)}</strong>.")
+                else:
+                    style.lead(f"Nessuna combinazione vincente: perdi i <strong>{eur(imp)}</strong> giocati.")
+                style.metrics([
+                    ("Giocato", eur(imp), f"{len(giocate)} giocate su {len(esiti)} scontrini"
+                     if len(esiti) > 1 else f"{len(giocate)} giocate"),
+                    ("Vinto netto", eur(netto), "dopo tetto e ritenuta"),
+                    ("Saldo", eur(netto - imp), "vinto meno giocato"),
+                ])
+                if righe:
+                    with st.expander("Come si arriva a questo importo"):
+                        style.table(["Passaggio", "Importo"],
+                                    [["Vincita lorda", eur(lordo)],
+                                     [f"Dopo il tetto di {eur(regole.VINCITA_MAX_SCONTRINO)} per scontrino",
+                                      eur(pagabile)],
+                                     [f"Ritenuta {tax:.0%}", "− " + eur(ritenuta_)],
+                                     ["Vincita netta", eur(netto)]])
+                        if len(esiti) > 1:
+                            st.caption(f"Oltre {eur(regole.IMPORTO_MAX)} le giocate vanno su più scontrini: tetto e "
+                                       "ritenuta si applicano a ciascuno.")
+                    style.table(["Scontrino", "Giocata", "Numeri", "Ruota", "Sorte", "Uscite", "Vincita lorda"],
                                 [[str(n_), str(r_.giocata + 1), "-".join(map(str, giocate[r_.giocata].numeri)),
                                   r_.ruota, SORTI_LABEL[r_.sorte], f"{r_.vincenti} su {r_.combinazioni}",
                                   eur(r_.lordo)] for n_, r_ in righe])
+
+    with st.expander("Come si calcolano le vincite (coefficienti ufficiali)"):
+        st.markdown("La posta di ogni sorte è divisa tra le combinazioni giocate e tra le ruote; i coefficienti "
+                    f"valgono per una singola ruota. Tetto di {eur(regole.VINCITA_MAX_SCONTRINO)} per scontrino, "
+                    f"poi ritenuta dell'{regole.RITENUTA:.0%}.")
+        style.table(["Sorte", "Coefficiente", "Ritorno medio per 1 €", "Con ritenuta"],
+                    [[SORTI_LABEL[s_], _it(f"{c_:,.3f}".rstrip("0").rstrip(".")),
+                      eur(regole.ritorno_atteso_per_euro(s_)),
+                      eur(regole.ritorno_atteso_per_euro(s_, regole.RITENUTA))]
+                     for s_, c_ in regole.COEFFICIENTI.items()])
+
+# ------------------------------------------------------------------ tab Vincita certa
+with tab_cert:
+    if err:
+        style.error_card(err)
+    else:
+        cert = certain_win_extension(k, t)
+        unit = stake * wheels * draws               # costo di ogni ambo giocato
+        free = N_NUMBERS - k
+        st.caption("Parte dal sistema della pagina principale e calcola quanti ambi servono ancora, usando solo i "
+                   "numeri che non hai già giocato, per vincere sempre almeno un ambo (probabilità 100% su ogni ruota).")
+        if not cert.possible:
+            style.error_card(f"Con la garanzia t = {t} non si arriva al 100% usando solo numeri nuovi.")
+            with style.card("cert_why"):
+                st.markdown(
+                    f"Su una ruota escono {N_DRAWN} numeri e si vince sempre solo se, tra qualsiasi {N_DRAWN} numeri, "
+                    f"almeno due formano un ambo giocato. Il tuo sistema usa già {t - 1} gruppi di numeri che non si "
+                    f"giocano tra loro e ne ammette al massimo {N_DRAWN - 1}: un numero nuovo, non collegato ai tuoi, "
+                    f"ne aggiungerebbe uno e porterebbe a {N_DRAWN} la possibilità di estrarre {N_DRAWN} numeri senza "
+                    f"nessun ambo giocato.\n\nPer arrivare al 100% dovresti collegare i numeri nuovi a quelli già "
+                    f"giocati (qui esclusi) oppure scegliere una garanzia più bassa, con t ≤ {N_DRAWN - 1}.")
+        else:
+            others = [n for n in range(1, N_NUMBERS + 1) if n not in set(labels)]
+            groups: list[list[int]] = []
+            pos_ = 0
+            for n_ in cert.extra_groups:
+                groups.append(others[pos_:pos_ + n_])
+                pos_ += n_
+            extra_pairs = [p_ for g_ in groups for p_ in combinations(g_, 2)]
+            total_design = certain_win_design(k, t)
+            s_tot = analyze(total_design, stake=stake, wheels=wheels, payout=payout, tax=tax, draws=draws)
+            j_min = next(j for j, p_ in enumerate(s_tot.pmf) if p_ > 1e-12)
+            min_win = j_min * s_tot.win_value
+            min_net = min_win - s_tot.cost
+            n_sc = regole.scontrini_necessari(cert.total_edges * stake * wheels)
+
+            if cert.extra_edges == 0:
+                style.lead("Il tuo sistema <strong>vince già sempre</strong> almeno un ambo: non serve aggiungere nulla.")
+            else:
+                style.lead(f"Per essere sicuro di vincere almeno un ambo devi aggiungere "
+                           f"<strong>{_it(f'{cert.extra_edges:,}')} ambi</strong> sugli altri <strong>{free} numeri"
+                           f"</strong>: <strong>{eur(cert.extra_edges * unit)}</strong> in più, "
+                           f"<strong>{eur(s_tot.cost)}</strong> in tutto.")
+            style.metrics([
+                ("Ambi in più", _it(f"{cert.extra_edges:,}"), f"su {free} numeri nuovi"),
+                ("Costo in più", eur(cert.extra_edges * unit), f"{eur(unit)} per ambo"),
+                ("Costo totale", eur(s_tot.cost), _it(f"{cert.total_edges:,}") + " ambi in tutto"),
+                ("Vincita minima", eur(min_win), "se esce un solo ambo"),
+            ])
+            with style.card("cert_gain"):
+                style.title("Vincere sempre non vuol dire guadagnare")
+                if min_net < 0:
+                    st.markdown(
+                        f"Nel caso peggiore esce un solo ambo e incassi {eur(min_win)} a fronte di {eur(s_tot.cost)} "
+                        f"spesi: perdi almeno **{eur(-min_net)}**. In media la perdita resta del "
+                        f"**{pct(s_tot.loss_pct, 1)}**, come per qualsiasi altro sistema con la stessa quota.")
                 else:
-                    st.markdown("Nessuna combinazione vincente.")
-    elif not giocate:
-        st.caption("Includi il sistema o aggiungi una giocata per calcolare le vincite.")
+                    st.markdown(f"Con questa quota anche il caso peggiore chiude in positivo: almeno "
+                                f"**{eur(min_net)}** di saldo. In media si perde comunque il "
+                                f"**{pct(s_tot.loss_pct, 1)}**.")
+                st.caption(f"Controllo: probabilità di vincere almeno un ambo con il sistema completo = "
+                           f"{pct(s_tot.p_win_any * 100, 4)}.")
+                if n_sc > 1:
+                    st.caption(f"Importo per concorso {eur(cert.total_edges * stake * wheels)}: oltre il massimo di "
+                               f"{eur(regole.IMPORTO_MAX)} per scontrino servono almeno {n_sc} scontrini.")
+
+            if cert.extra_edges:
+                ticket_extra = pd.DataFrame(
+                    [{"Ambo": i + 1, "Numero A": a, "Numero B": b, "Posta (€)": round(stake * wheels, 2),
+                      "Ruote": ruote_txt, "Concorsi": draws} for i, (a, b) in enumerate(extra_pairs)])
+                with style.card("cert_add"):
+                    c = st.columns([1, 0.2], vertical_alignment="center")
+                    with c[0]:
+                        style.title(f"Cosa aggiungere · {_it(f'{cert.extra_edges:,}')} ambi")
+                    c[1].download_button("Scarica CSV", ticket_extra.to_csv(index=False).encode("utf-8"),
+                                         file_name=f"ambi_in_piu_k{k}_t{t}.csv", mime="text/csv", width="stretch")
+                    st.caption("Dividi i numeri nuovi in questi gruppi e gioca tutti gli ambi dentro ogni gruppo.")
+                    style.table(["Gruppo", "Numeri", "Ambi", "Quali numeri"],
+                                [[str(i + 1), str(len(g_)), _it(f"{comb(len(g_), 2):,}"),
+                                  '<div style="white-space:normal;min-width:320px">' + ", ".join(map(str, g_)) + "</div>"]
+                                 for i, g_ in enumerate(groups) if g_])
+                    style.pairs_grid(extra_pairs)
+
+            with st.expander("Come si calcola"):
+                st.markdown(
+                    f"Su una ruota escono {N_DRAWN} numeri e si vince sempre solo se ogni gruppo di {N_DRAWN} numeri "
+                    f"contiene almeno un ambo giocato. Il tuo sistema ha già {t - 1} gruppi di numeri che non si "
+                    f"giocano tra loro; ne ammettiamo al massimo {N_DRAWN - 1}, quindi sui numeri nuovi ne restano "
+                    f"{N_DRAWN - t}. Il minimo di ambi per {N_DRAWN - t} gruppi è dato ancora dal teorema di Turán: "
+                    f"si dividono i numeri nuovi in {N_DRAWN - t} gruppi il più possibile uguali e si giocano tutti "
+                    f"gli ambi dentro ogni gruppo.")
+                st.markdown(
+                    f"Se potessi collegare anche i numeri già giocati, partendo da zero ne basterebbero "
+                    f"**{_it(f'{cert.from_scratch_edges:,}')}** in tutto. Tenere separati i tuoi {k} numeri costa "
+                    f"{_it(f'{cert.total_edges - cert.from_scratch_edges:,}')} ambi in più rispetto a quel minimo.")
 
 # ------------------------------------------------------------------ tab Confronto
 with tab_cmp:

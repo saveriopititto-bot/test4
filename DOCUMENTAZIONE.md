@@ -58,6 +58,24 @@ $$
 
 Per questo nessun design può cambiare la perdita media: può solo cambiarne la forma, cioè quanto spesso e quanto a lungo si vince.
 
+### Vincita certa
+
+Su una ruota escono 5 numeri, quindi si vince **sempre** almeno un ambo se ogni gruppo di 5 numeri contiene un ambo giocato, cioè se
+
+$$
+\alpha(G) \le 4
+$$
+
+La scheda "Vincita certa" parte dal sistema di Turán $(k, t)$, che ha $\alpha = t - 1$, e aggiunge ambi usando solo gli altri $90 - k$ numeri. Poiché i nuovi ambi non toccano i numeri già giocati, gli insiemi indipendenti delle due parti si sommano: sui numeri liberi possono restare al massimo $5 - t$ gruppi che non si giocano tra loro. Il minimo è di nuovo quello di Turán, con $5 - t$ cricche bilanciate:
+
+$$
+|E|_{\text{in più}} = \sum_{i=1}^{5-t} \binom{m_i}{2}, \qquad m_i \in \left\{\left\lfloor \tfrac{90-k}{5-t} \right\rfloor,\ \left\lceil \tfrac{90-k}{5-t} \right\rceil\right\}
+$$
+
+Con $t = 5$ non ci sono gruppi disponibili: senza collegare i numeri nuovi a quelli già giocati la vincita certa è impossibile. Partendo da zero, senza vincoli, il minimo assoluto è $|E|_{\min}(90, 5) = 968$ ambi; tenere separati i numeri già giocati costa di più. Esempio: con $k = 8$ e $t = 3$ servono $2 \cdot \binom{41}{2} = 1640$ ambi in più, 1652 in tutto.
+
+Vincere sempre non vuol dire guadagnare: nel caso peggiore può uscire un solo ambo, e la perdita media resta quella di qualsiasi altro sistema con la stessa quota.
+
 ## Come funziona il codice
 
 Il progetto sono sei moduli Python in radice più una cartella di test. `core.py` contiene la matematica, `regole.py` le regole di gioco, e `app.py` li usa per costruire l'interfaccia.
@@ -69,10 +87,10 @@ Il progetto sono sei moduli Python in radice più una cartella di test. `core.py
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `viz.py` | Grafici Plotly: grafo, frontiera costo/probabilità, saldo simulato |
 | `style.py` | Stile dell'interfaccia: CSS, schede arrotondate e blocchi HTML |
-| `app.py` | Interfaccia Streamlit: barra laterale, quattro schede principali e cinque sottoschede in "Approfondimenti" |
+| `app.py` | Interfaccia Streamlit: barra laterale, cinque schede principali e cinque sottoschede in "Approfondimenti" |
 | `DOCUMENTAZIONE.md` | Questa documentazione, mostrata anche in Approfondimenti → Documentazione |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
-| `tests/` | `test_core.py` (38 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
+| `tests/` | `test_core.py` (50 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
 
 ### Flusso di un calcolo
 
@@ -97,6 +115,8 @@ Streamlit riesegue `app.py` da capo a ogni modifica di un controllo. Ogni esecuz
 | `solve_ilp(k, t, min_wins)` | ILP con CP-SAT; `min_wins` permette di garantire più di un ambo |
 | `simulate_wins(design, n)` | Monte Carlo con estrazioni casuali |
 | `max_k_for_edges`, `best_t_for_edges` | Problema duale: dato il budget, quanti numeri o quale garanzia |
+| `certain_win_extension(k, t)` | Ambi da aggiungere sui numeri non ancora giocati per vincere sempre almeno un ambo (oggetto `CertainWin`) |
+| `certain_win_design(k, t)` | Sistema completo per la vincita certa: quello di partenza più l'aggiunta, su tutti i 90 numeri |
 
 OR-Tools serve solo alla sottoscheda "Verifica ILP" e PuLP solo a "ILP con PuLP" (entrambe in "Approfondimenti"): se uno dei due manca, il resto dell'app funziona comunque.
 
@@ -143,7 +163,7 @@ Vince ogni coppia estratta formata da un numero giocato e dal precedente o dal s
 
 ## L'interfaccia
 
-L'app ha una barra laterale per i parametri e quattro schede che mostrano i risultati; gli strumenti di verifica sono raccolti nella scheda "Approfondimenti". Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
+L'app ha una barra laterale per i parametri e cinque schede che mostrano i risultati; gli strumenti di verifica sono raccolti nella scheda "Approfondimenti". Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
 
 ### Barra laterale
 
@@ -177,7 +197,8 @@ La barra laterale è divisa in tre passi numerati più le opzioni avanzate.
 |---|---|
 | Risultato | Una frase di riepilogo, le metriche (ambi da giocare, costo, probabilità che la garanzia scatti e di vincere almeno un ambo) e quanto perdi in media. Poi cosa giocare (gli ambi, scaricabili in CSV), il grafo dei tuoi numeri e cosa può succedere: la distribuzione dell'esito, anche a fasce se i valori sono troppi |
 | Confronto | A parità di spesa, confronta il sistema ridotto con tutti gli ambi e con le coppie disgiunte, e disegna la frontiera costo contro probabilità di vincita |
-| Controlla una giocata | Applica le regole a uno scontrino, con il sistema ridotto e/o una giocata libera su qualsiasi sorte, contro un'estrazione casuale (con seed) o inserita a mano |
+| Controlla una giocata | In tre passi: cosa giochi (il sistema ridotto e/o una giocata tua su qualsiasi sorte), l'estrazione (casuale, con un numero per cambiarla, o inserita a mano, solo per le ruote che giochi) e l'esito con le regole ufficiali, spiegato passaggio per passaggio |
+| Vincita certa | Quanti ambi aggiungere, sui numeri non ancora giocati, per vincere sempre almeno un ambo: costo in più, vincita minima, i gruppi da giocare (anche in CSV) e perché vincere sempre non vuol dire guadagnare |
 | Approfondimenti | Cinque sottoschede per chi vuole verificare i conti (sotto) |
 
 Le sottoschede di "Approfondimenti":
@@ -205,7 +226,7 @@ streamlit run app.py
 
 ### Test
 
-I 92 test passano tutti (38 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design e le regole di gioco.
+I 104 test passano tutti (50 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design, le regole di gioco e che la vincita certa sia minima (confronto con la ricerca esaustiva su casi piccoli) e vinca davvero sempre.
 
 ```bash
 pip install pytest

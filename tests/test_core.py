@@ -7,7 +7,7 @@ import pytest
 
 from core import (
     AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, _counts_by_enumeration, analyze, best_t_for_edges,
-    clique_sizes, complete_design, make_design, matching_design, max_edges_for_budget,
+    certain_win_design, certain_win_extension, clique_sizes, complete_design, make_design, matching_design, max_edges_for_budget,
     max_k_for_edges, ortools_available, p_guarantee, simulate_wins, solve_ilp,
     theoretical_ev_return, turan_design, turan_group_sizes, turan_min_edges, wins_counts, wins_pmf,
 )
@@ -141,3 +141,53 @@ def test_simulation_close_to_exact():
 def test_simulation_multi_wheel_shape():
     W = simulate_wins(turan_design(6, 3), 1000, wheels=3, seed=0)
     assert W.shape == (1000,) and W.max() <= 3 * comb(N_DRAWN, 2)
+
+
+# ------------------------------------------------------------------ vincita certa
+def _min_extra_bruteforce(k, t, N, d):
+    """Minimo di ambi da aggiungere sui numeri liberi, provando tutti i sottoinsiemi (N piccolo)."""
+    base = set(turan_design(k, t).edges)
+    pairs = list(combinations(range(k, N), 2))
+    groups = [set(g) for g in combinations(range(N), d)]
+    best = None
+    for mask in range(1 << len(pairs)):
+        n_extra = bin(mask).count("1")
+        if best is not None and n_extra >= best:
+            continue
+        edges = base | {pairs[i] for i in range(len(pairs)) if mask >> i & 1}
+        if all(any(a in g and b in g for a, b in edges) for g in groups):
+            best = n_extra
+    return best
+
+
+@pytest.mark.parametrize("k,t,N,d", [(3, 2, 8, 4), (2, 2, 7, 4), (4, 3, 8, 4), (3, 3, 7, 4), (4, 4, 7, 4)])
+def test_certain_win_extension_matches_bruteforce(k, t, N, d):
+    ext = certain_win_extension(k, t, N, d)
+    brute = _min_extra_bruteforce(k, t, N, d)
+    if brute is None:
+        assert not ext.possible
+    else:
+        assert ext.possible and ext.extra_edges == brute
+
+
+@pytest.mark.parametrize("k,t", [(8, 3), (3, 2), (10, 4), (40, 4), (90, 3)])
+def test_certain_win_design_always_wins(k, t):
+    d = certain_win_design(k, t)
+    assert wins_counts(d)[0] == 0
+    assert analyze(d).p_win_any == pytest.approx(1.0)
+    ext = certain_win_extension(k, t)
+    assert d.n_edges == ext.total_edges == turan_min_edges(k, t) + ext.extra_edges
+    assert ext.total_edges >= ext.from_scratch_edges == turan_min_edges(N_NUMBERS, N_DRAWN)
+
+
+def test_certain_win_values():
+    ext = certain_win_extension(8, 3)
+    assert ext.extra_groups == (41, 41) and ext.extra_edges == 1640 and ext.total_edges == 1652
+    assert certain_win_extension(N_NUMBERS, 3).extra_edges == 0       # nessun numero libero
+
+
+def test_certain_win_impossible_with_t_equal_d():
+    ext = certain_win_extension(8, N_DRAWN)
+    assert not ext.possible
+    with pytest.raises(ValueError):
+        certain_win_design(8, N_DRAWN)
