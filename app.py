@@ -19,7 +19,7 @@ from core import (
     simulate_wins, solve_ilp, turan_design, turan_min_edges,
 )
 
-st.set_page_config(page_title="Sistemi ridotti per ambi", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Come perdere al lotto", page_icon="🎯", layout="wide")
 style.apply_style()
 
 PLOTLY_CONFIG = {"displayModeBar": False}
