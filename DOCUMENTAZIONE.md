@@ -69,8 +69,8 @@ Il progetto sono sei moduli Python in radice più una cartella di test. `core.py
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `viz.py` | Grafici Plotly: grafo, frontiera costo/probabilità, saldo simulato |
 | `style.py` | Stile dell'interfaccia: CSS, schede arrotondate e blocchi HTML |
-| `app.py` | Interfaccia Streamlit: barra laterale e otto schede |
-| `DOCUMENTAZIONE.md` | Questa documentazione, mostrata anche nella scheda "Documentazione" |
+| `app.py` | Interfaccia Streamlit: barra laterale, quattro schede principali e cinque sottoschede in "Approfondimenti" |
+| `DOCUMENTAZIONE.md` | Questa documentazione, mostrata anche in Approfondimenti → Documentazione |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
 | `tests/` | `test_core.py` (38 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
 
@@ -98,7 +98,7 @@ Streamlit riesegue `app.py` da capo a ogni modifica di un controllo. Ogni esecuz
 | `simulate_wins(design, n)` | Monte Carlo con estrazioni casuali |
 | `max_k_for_edges`, `best_t_for_edges` | Problema duale: dato il budget, quanti numeri o quale garanzia |
 
-OR-Tools serve solo alla scheda "Verifica ILP" e PuLP solo a "ILP con PuLP": se uno dei due manca, il resto dell'app funziona comunque.
+OR-Tools serve solo alla sottoscheda "Verifica ILP" e PuLP solo a "ILP con PuLP" (entrambe in "Approfondimenti"): se uno dei due manca, il resto dell'app funziona comunque.
 
 ## Le regole di gioco
 
@@ -143,38 +143,51 @@ Vince ogni coppia estratta formata da un numero giocato e dal precedente o dal s
 
 ## L'interfaccia
 
-L'app ha una barra laterale per i parametri e otto schede che mostrano i risultati. Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
+L'app ha una barra laterale per i parametri e quattro schede che mostrano i risultati; gli strumenti di verifica sono raccolti nella scheda "Approfondimenti". Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
 
 ### Barra laterale
 
-La prima scelta è cosa fissare. Le tre modalità sono tre modi di porre lo stesso problema:
+La barra laterale è divisa in tre passi numerati più le opzioni avanzate.
+
+**1 · Da dove parti?** Le tre modalità sono tre modi di porre lo stesso problema:
 
 | Modalità | Cosa fissi | Cosa ottieni |
 |---|---|---|
-| Garanzia → costo minimo | $k$ (3-40) e $t$ | Il sistema ridotto più economico |
-| Budget + garanzia → quanti numeri | Budget e $t$ | Il massimo $k$ coperto con quel budget |
-| Budget + numeri → garanzia migliore | Budget e $k$ (3-40) | Il $t$ più basso ottenibile |
+| Scelgo numeri e garanzia | $k$ (3-40) e $t$ | Quanto costa: il sistema ridotto più economico |
+| Ho un budget e una garanzia | Budget e $t$ | Quanti numeri copri: il massimo $k$ con quel budget |
+| Ho un budget e dei numeri | Budget e $k$ (3-40) | Che garanzia ottieni: il $t$ più basso possibile |
 
-Sotto ci sono i parametri comuni:
+**2 · I tuoi dati.** I cursori o il budget della modalità scelta, con sotto il riepilogo della garanzia ("se escono almeno $t$ dei tuoi $k$ numeri, vinci almeno un ambo").
 
-- **Puntata** per ambo e per ruota, da 0,05 €.
-- **Concorsi**, da 1 a 50 (abbonamento).
+**3 · Quanto giochi.**
+
+- **Puntata per ogni ambo**, per ruota, da 0,05 €.
 - **Ruote**: una selezione libera oppure "Tutte le ruote" con la Nazionale opzionale.
+
+**Opzioni avanzate** (chiuse all'inizio):
+
+- **Concorsi consecutivi**, da 1 a 50 (abbonamento).
 - **Quota ambo**, di partenza 250.
-- **Ritenuta** dell'8%, disattivabile per confronto.
+- **Ritenuta** dell'8% sulle vincite, disattivabile per confronto.
 - **I tuoi numeri**, facoltativi: se li inserisci sostituiscono l'etichetta 1…k nella schedina.
 
-### Le otto schede
+### Le schede
 
 | Scheda | Cosa mostra |
 |---|---|
-| Risultato | Ambi da giocare, costo, garanzia, P(garanzia), P(vincere almeno un ambo), perdita media. Il grafo del sistema, la distribuzione dell'esito (anche a fasce se i valori sono troppi) e la schedina scaricabile in CSV |
-| Calcolo vincite | Applica le regole a uno scontrino, con il sistema ridotto e/o una giocata libera su qualsiasi sorte, contro un'estrazione casuale (con seed) o inserita a mano |
+| Risultato | Una frase di riepilogo, le metriche (ambi da giocare, costo, probabilità che la garanzia scatti e di vincere almeno un ambo) e quanto perdi in media. Poi cosa giocare (gli ambi, scaricabili in CSV), il grafo dei tuoi numeri e cosa può succedere: la distribuzione dell'esito, anche a fasce se i valori sono troppi |
 | Confronto | A parità di spesa, confronta il sistema ridotto con tutti gli ambi e con le coppie disgiunte, e disegna la frontiera costo contro probabilità di vincita |
+| Controlla una giocata | Applica le regole a uno scontrino, con il sistema ridotto e/o una giocata libera su qualsiasi sorte, contro un'estrazione casuale (con seed) o inserita a mano |
+| Approfondimenti | Cinque sottoschede per chi vuole verificare i conti (sotto) |
+
+Le sottoschede di "Approfondimenti":
+
+| Sottoscheda | Cosa mostra |
+|---|---|
+| Simulazione | Monte Carlo fino a 2 milioni di estrazioni, confrontato con i valori esatti, più il saldo cumulato |
 | Verifica ILP | Risolve l'ILP con CP-SAT ($k$ fino a 14) e lo confronta con Turán; permette anche di garantire $m \ge 2$ ambi |
 | ILP con PuLP | Stesso modello con PuLP/CBC ($k$ fino a 12) e metriche per enumerazione diretta, come controllo indipendente |
-| Simulazione | Monte Carlo fino a 2 milioni di estrazioni, confrontato con i valori esatti, più il saldo cumulato |
-| Modello | Riassunto teorico: setup, grafo, garanzia, ILP, Turán, distribuzione, valore atteso |
+| Come funziona | Riassunto teorico: setup, grafo, garanzia, ILP, Turán, distribuzione, valore atteso |
 | Documentazione | Questa documentazione |
 
 Se i parametri sono incoerenti, per esempio un budget troppo basso, la scheda mostra un messaggio d'errore invece dei risultati. Le giocate che superano i limiti di importo vengono segnalate.
@@ -213,7 +226,7 @@ PuLP è fissato a una versione inferiore alla 4 perché dalla 4.0 non include pi
 
 ### Un esempio d'uso
 
-Vuoi giocare con 8 numeri e la garanzia di un ambo se ne escono 3 su una ruota. Scegli la modalità "Garanzia → costo minimo" con $k = 8$ e $t = 3$. Il sistema divide gli 8 numeri in 2 gruppi da 4 e gioca tutti gli ambi dentro ogni gruppo, cioè $2 \cdot \binom{4}{2} = 12$ ambi. La scheda Risultato mostra costo, probabilità e distribuzione, e la scheda Confronto mostra che tutti gli ambi su 8 numeri ($\binom{8}{2} = 28$) costerebbero più del doppio con la stessa perdita percentuale.
+Vuoi giocare con 8 numeri e la garanzia di un ambo se ne escono 3 su una ruota. Scegli la modalità "Scelgo numeri e garanzia" con $k = 8$ e $t = 3$. Il sistema divide gli 8 numeri in 2 gruppi da 4 e gioca tutti gli ambi dentro ogni gruppo, cioè $2 \cdot \binom{4}{2} = 12$ ambi. La scheda Risultato mostra costo, probabilità e distribuzione, e la scheda Confronto mostra che tutti gli ambi su 8 numeri ($\binom{8}{2} = 28$) costerebbero più del doppio con la stessa perdita percentuale.
 
 ## Limiti e ipotesi
 
@@ -223,7 +236,7 @@ L'app è uno strumento didattico e non una guida per vincere: il valore atteso r
 - **Quali numeri scegli è indifferente.** L'estrazione è uniforme, quindi conta solo la struttura del sistema, non i numeri.
 - **Garanzia solo fino a $t = 5$.** Escono 5 numeri, quindi per $t \ge 6$ la garanzia non scatta mai.
 - **Ambetto semplificato.** Si assume la numerazione circolare e che il numero vicino non sia a sua volta giocato.
-- **Dimensioni massime.** Il sistema usa fino a 40 numeri; la modalità Budget + garanzia può salire fino a 90. L'enumerazione per grafi generici si ferma a 2,5 milioni di combinazioni, e i controlli ILP girano su $k$ fino a 14 (CP-SAT) e 12 (PuLP).
+- **Dimensioni massime.** Il sistema usa fino a 40 numeri; la modalità "Ho un budget e una garanzia" può salire fino a 90. L'enumerazione per grafi generici si ferma a 2,5 milioni di combinazioni, e i controlli ILP girano su $k$ fino a 14 (CP-SAT) e 12 (PuLP).
 - **Fuori dal calcolo.** Orari di raccolta e modalità di compilazione della schedina non incidono sui risultati.
 - **Stile legato a Streamlit.** Lo stile in `style.py` usa attributi interni di Streamlit (`data-testid`, `role`), testati con la versione 1.65: dopo un aggiornamento un elemento può perdere lo stile e il selettore va aggiornato.
 

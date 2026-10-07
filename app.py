@@ -61,20 +61,21 @@ def parse_numbers(text: str, k: int) -> tuple[list[int], str | None]:
 
 # ------------------------------------------------------------------ sidebar
 # I contenitori fissano l'ordine visivo; puntata e ruote si leggono prima perché servono al budget.
-sb_mode, sb_params, sb_money, sb_nums = (st.sidebar.container() for _ in range(4))
-MODE_1 = "Garanzia → costo minimo"
-MODE_2 = "Budget + garanzia → quanti numeri"
-MODE_3 = "Budget + numeri → garanzia migliore"
+sb_mode, sb_params, sb_money, sb_adv, sb_nums = (st.sidebar.container() for _ in range(5))
+MODE_1 = "Scelgo numeri e garanzia"
+MODE_2 = "Ho un budget e una garanzia"
+MODE_3 = "Ho un budget e dei numeri"
 T_HELP = "Se escono almeno t dei tuoi k numeri, vinci almeno un ambo."
-mode = sb_mode.radio("Cosa vuoi fissare?", [MODE_1, MODE_2, MODE_3])
+with sb_mode:
+    style.section("1 · Da dove parti?")
+    mode = st.radio("Da dove parti?", [MODE_1, MODE_2, MODE_3], label_visibility="collapsed",
+                    captions=["ti dico quanto costa", "ti dico quanti numeri copri", "ti dico che garanzia ottieni"])
 
 with sb_money:
-    c = st.columns(2)
-    stake = c[0].number_input("Puntata (€)", min_value=0.05, value=1.0, step=0.05,
-                              help="Posta per ogni ambo e per ogni ruota. Importo per scontrino tra 1 e 200 €, "
-                                   "a incrementi di 0,50 €.")
-    draws = int(c[1].number_input("Concorsi", min_value=1, max_value=regole.MAX_CONCORSI, value=1, step=1,
-                                  help=f"Abbonamento: stessa giocata per più concorsi, fino a {regole.MAX_CONCORSI}."))
+    style.section("3 · Quanto giochi")
+    stake = st.number_input("Puntata per ogni ambo (€)", min_value=0.05, value=1.0, step=0.05,
+                            help="Posta per ogni ambo e per ogni ruota. Importo per scontrino tra 1 e 200 €, "
+                                 "a incrementi di 0,50 €.")
     if st.checkbox("Tutte le ruote",
                    help="Le 10 ruote cittadine: le giocate \"su tutte le ruote\" non comprendono la Nazionale."):
         ruote = regole.RUOTE_CITTADINE
@@ -87,23 +88,30 @@ with sb_money:
             st.error("Scegli almeno una ruota.")
             st.stop()
     wheels = len(ruote)
-    c = st.columns([1.2, 1], vertical_alignment="bottom")
-    payout = c[0].number_input("Quota ambo", min_value=1.0, value=AMBO_PAYOUT, step=10.0,
-                               help="Vincita per 1 € puntato. Coefficiente ufficiale per l'ambo su una ruota: 250.")
-    tax = regole.RITENUTA if c[1].checkbox(f"Ritenuta {regole.RITENUTA:.0%}", value=True,
-                                           help="Ritenuta sull'ammontare delle vincite.") else 0.0
+
+with sb_adv, st.expander("Opzioni avanzate"):
+    draws = int(st.number_input("Concorsi consecutivi", min_value=1, max_value=regole.MAX_CONCORSI, value=1,
+                                step=1, help=f"Abbonamento: stessa giocata per più concorsi, fino a "
+                                             f"{regole.MAX_CONCORSI}."))
+    payout = st.number_input("Quota ambo", min_value=1.0, value=AMBO_PAYOUT, step=10.0,
+                             help="Vincita per 1 € puntato. Coefficiente ufficiale per l'ambo su una ruota: 250.")
+    tax = regole.RITENUTA if st.checkbox(f"Ritenuta {regole.RITENUTA:.0%} sulle vincite", value=True,
+                                         help="Ritenuta sull'ammontare delle vincite.") else 0.0
+    numbers_text = st.text_input("I tuoi numeri", placeholder="Se vuoi, scrivili qui (es. 7, 18, 42)",
+                                 help="Se li lasci vuoti, nella schedina compaiono 1…k.")
 
 k: int
 t: int
 err: str | None = None
 budget: float | None = None
 with sb_params:
+    style.section("2 · I tuoi dati")
     if mode == MODE_1:
-        k = st.slider("Numeri scelti (k)", 3, 40, 8)
-        t = st.slider("Garanzia t", 2, min(N_DRAWN, k), min(3, k), help=T_HELP)
+        k = st.slider("Quanti numeri giochi (k)", 3, 40, 8)
+        t = st.slider("Garanzia (t)", 2, min(N_DRAWN, k), min(3, k), help=T_HELP)
     elif mode == MODE_2:
         budget = st.number_input("Budget totale (€)", min_value=0.0, value=20.0, step=1.0)
-        t = st.slider("Garanzia t", 2, N_DRAWN, 3, help=T_HELP)
+        t = st.slider("Garanzia (t)", 2, N_DRAWN, 3, help=T_HELP)
         k_best = max_k_for_edges(t, max_edges_for_budget(budget, stake, wheels * draws))
         if k_best is None:
             err = f"Con {eur(budget)} non si copre nemmeno il minimo: serve almeno {eur(stake * wheels * draws)}."
@@ -112,7 +120,7 @@ with sb_params:
             k = k_best
     else:
         budget = st.number_input("Budget totale (€)", min_value=0.0, value=20.0, step=1.0)
-        k = st.slider("Numeri scelti (k)", 3, 40, 10)
+        k = st.slider("Quanti numeri giochi (k)", 3, 40, 10)
         t_best = best_t_for_edges(k, max_edges_for_budget(budget, stake, wheels * draws))
         if t_best is None:
             t = min(N_DRAWN, k)
@@ -120,10 +128,10 @@ with sb_params:
             err = f"Con {k} numeri la garanzia più debole (t={t}) costa almeno {eur(need)}."
         else:
             t = t_best
+    if err is None:
+        st.caption(f"Se escono almeno **{t}** dei tuoi **{k}** numeri, vinci almeno un ambo.")
 
 with sb_nums:
-    numbers_text = st.text_input("I tuoi numeri (opzionale)", label_visibility="collapsed",
-                                 placeholder=f"I tuoi {k} numeri (opzionale)")
     labels, num_err = parse_numbers(numbers_text, k)
     if num_err:
         style.html(f'<p class="x-note" style="color:{style.A700};margin-top:-12px">{num_err}</p>')
@@ -144,15 +152,18 @@ ruote_txt = "tutte" if ruote == regole.RUOTE_CITTADINE else ", ".join(ruote)
 def summary() -> None:
     """Messaggio di soluzione, metriche e scheda 'Perdita media' (tab Risultato e Confronto)."""
     if mode != MODE_1:
-        style.solved(f"k = {k} numeri, garanzia t = {t}, {design.n_edges} ambi "
+        style.solved(f"{k} numeri, garanzia {t}, {design.n_edges} ambi "
                      f"({eur(stats.cost)} su {eur(budget)} di budget).")
+    style.lead(f"Giochi <strong>{design.n_edges} ambi</strong> sui tuoi <strong>{k} numeri</strong> per "
+               f"<strong>{eur(stats.cost)}</strong>. Se escono almeno <strong>{t}</strong> dei tuoi numeri vinci "
+               f"sicuramente almeno un ambo; in media perdi il <strong>{pct(stats.loss_pct, 1)}</strong> "
+               f"di quanto spendi.")
     style.metrics([
         ("Ambi da giocare", str(design.n_edges), f"su {comb(k, 2)} possibili"),
         ("Costo totale", eur(stats.cost),
          f"{eur(importo)} × {draws} concorsi" if draws > 1 else f"{eur(stake)} × {wheels} ruota/e"),
-        ("Garanzia", f"{t} su {k}", f"se escono ≥ {t} dei {k}"),
-        ("P(garanzia scatta)", pct(stats.p_guarantee * 100), one_in(stats.p_guarantee)),
-        ("P(vincere ≥ 1 ambo)", pct(stats.p_win_any * 100), one_in(stats.p_win_any)),
+        ("La garanzia scatta", pct(stats.p_guarantee * 100), one_in(stats.p_guarantee)),
+        ("Vinci almeno un ambo", pct(stats.p_win_any * 100), one_in(stats.p_win_any)),
     ])
     for e in importo_err:
         style.error_card(f"Giocata non valida: {e} (importo per concorso {eur(importo)}).")
@@ -164,9 +175,13 @@ def summary() -> None:
                     eur(stats.std_net), pct(stats.p_profit * 100), note)
 
 
-tab_res, tab_win, tab_cmp, tab_ilp, tab_pulp, tab_sim, tab_model, tab_doc = st.tabs(
-    ["Risultato", "Calcolo vincite", "Confronto", "Verifica ILP", "ILP con PuLP", "Simulazione", "Modello",
-     "Documentazione"])
+tab_res, tab_cmp, tab_win, tab_more = st.tabs(
+    ["Risultato", "Confronto", "Controlla una giocata", "Approfondimenti"])
+with tab_more:
+    st.caption("Strumenti per chi vuole verificare i conti: simulazione, controlli con solver, spiegazione del "
+               "modello e documentazione completa.")
+    tab_sim, tab_ilp, tab_pulp, tab_model, tab_doc = st.tabs(
+        ["Simulazione", "Verifica ILP", "ILP con PuLP", "Come funziona", "Documentazione"])
 
 # ------------------------------------------------------------------ tab Risultato
 with tab_res:
@@ -174,9 +189,22 @@ with tab_res:
         style.error_card(err)
     else:
         summary()
+        pairs = [(labels[a], labels[b]) for a, b in design.edges]
+        ticket = pd.DataFrame(
+            [{"Ambo": i + 1, "Numero A": a, "Numero B": b, "Posta (€)": round(stake * wheels, 2),
+              "Ruote": ruote_txt, "Concorsi": draws} for i, (a, b) in enumerate(pairs)])
+        with style.card("ticket"):
+            c = st.columns([1, 0.2], vertical_alignment="center")
+            with c[0]:
+                style.title(f"Cosa giocare · {design.n_edges} ambi · ruote: {ruote_txt}")
+            c[1].download_button("Scarica CSV", ticket.to_csv(index=False).encode("utf-8"),
+                                 file_name=f"ambi_k{k}_t{t}.csv", mime="text/csv", width="stretch")
+            style.pairs_grid(pairs)
+            st.caption("La posta di ogni ambo è divisa tra le ruote giocate (i coefficienti valgono per una ruota).")
         left, right = st.columns(2, gap="medium")
         with left, style.card("graph"):
-            style.title("Il grafo")
+            style.title("Come sono legati i tuoi numeri")
+            st.caption("Ogni linea è un ambo da giocare.")
             if design.n_edges <= 1500:
                 st.plotly_chart(viz.graph_figure(design, labels), width="stretch", config=PLOTLY_CONFIG)
             else:
@@ -185,7 +213,8 @@ with tab_res:
             st.caption(f"{len(sizes)} gruppi di numeri che si giocano tutti tra loro: "
                        + ", ".join(str(s) for s in sizes) + ".")
         with right, style.card("dist"):
-            style.title("Distribuzione dell'esito")
+            style.title("Cosa può succedere")
+            st.caption("Per ogni numero di ambi vincenti: quanto incassi, quanto resta dopo la spesa e quanto è probabile.")
             # righe (da, a, probabilita'): una per valore, o fasce di pari ampiezza se i valori sono troppi
             nz = [j for j, p in enumerate(stats.pmf) if p > 1e-12]
             j_lo, j_hi = nz[0], nz[-1]
@@ -208,7 +237,7 @@ with tab_res:
                              pct(p * 100, 4),
                              f'<div style="display:flex;flex-direction:column;gap:4px">{style.bar(width)}'
                              f'<span style="font-size:12px">{one_in(p)}</span></div>'])
-            style.table(["Ambi", "Vincita lorda", "Saldo netto", "Probabilità", "Frequenza (scala log)"],
+            style.table(["Ambi vincenti", "Incasso", "Saldo", "Probabilità", "Quanto spesso"],
                         rows, {4: "34%"})
             if step > 1:
                 st.caption(f"Valori raggruppati in fasce di {step} ambi vincenti (probabilità sommate).")
@@ -216,19 +245,6 @@ with tab_res:
                 st.caption(f"Saldo dopo la ritenuta. Con sole puntate su ambo uno scontrino vince al massimo "
                            f"{eur(regole.COEFFICIENTI[regole.AMBO] * regole.IMPORTO_MAX)}: il tetto di "
                            f"{eur(regole.VINCITA_MAX_SCONTRINO)} non viene mai raggiunto.")
-
-        pairs = [(labels[a], labels[b]) for a, b in design.edges]
-        ticket = pd.DataFrame(
-            [{"Ambo": i + 1, "Numero A": a, "Numero B": b, "Posta (€)": round(stake * wheels, 2),
-              "Ruote": ruote_txt, "Concorsi": draws} for i, (a, b) in enumerate(pairs)])
-        with style.card("ticket"):
-            c = st.columns([1, 0.2], vertical_alignment="center")
-            with c[0]:
-                style.title(f"Schedina · {design.n_edges} ambi · ruote: {ruote_txt}")
-            c[1].download_button("Scarica CSV", ticket.to_csv(index=False).encode("utf-8"),
-                                 file_name=f"ambi_k{k}_t{t}.csv", mime="text/csv", width="stretch")
-            style.pairs_grid(pairs)
-            st.caption("La posta di ogni ambo è divisa tra le ruote giocate (i coefficienti valgono per una ruota).")
 
 # ------------------------------------------------------------------ tab Calcolo vincite
 SORTI_LABEL = {
@@ -346,7 +362,8 @@ with tab_cmp:
     if err:
         style.error_card(err)
     else:
-        summary()
+        st.caption(f"Stessa spesa di {eur(stats.cost)}, diversi modi di giocarla: cambia la forma del rischio, "
+                   "non quanto si perde in media.")
 
         def row(label: str, d: Design, guarantee_t: int | None) -> list[str]:
             s = analyze(d, t=guarantee_t, stake=stake, wheels=wheels, payout=payout, tax=tax, draws=draws)
@@ -365,8 +382,8 @@ with tab_cmp:
                 rows.append(row(f"Tutti gli ambi su {k} numeri", complete_design(k), 2))
             if 2 * design.n_edges <= N_NUMBERS:
                 rows.append(row(f"Coppie disgiunte ({design.n_edges} ambi)", matching_design(design.n_edges), None))
-            style.table(["Design", "Ambi", "Costo", "Garanzia", "P(garanzia)", "P(≥1 ambo)", "Frequenza",
-                         "Perdita media", "Perdita %", "Dev. std", "P(profitto)"], rows)
+            style.table(["Come giochi", "Ambi", "Costo", "Garanzia", "Garanzia scatta", "Vinci qualcosa",
+                         "Quanto spesso", "Perdita media", "Perdita %", "Oscillazione", "Chiudi in positivo"], rows)
             if 2 * design.n_edges > N_NUMBERS:
                 st.caption(f"Le coppie disgiunte con {design.n_edges} ambi richiederebbero "
                            f"{2 * design.n_edges} numeri (> {N_NUMBERS}): confronto non disponibile.")

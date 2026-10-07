@@ -46,7 +46,7 @@ section[data-testid="stSidebar"] > div {{ background: transparent; }}
 section[data-testid="stSidebar"] div:has(> [data-testid="stSidebarResizeHandle"]) {{ display: none; }}
 [data-testid="stSidebarContent"] {{ background: #fff; border-radius: var(--radius-lg); margin: 20px 0 20px 20px;
   box-shadow: var(--shadow-soft); width: calc(100% - 20px) !important; height: calc(100vh - 40px);
-  padding: 0; overflow: hidden; position: relative; }}
+  padding: 0; overflow-x: hidden; overflow-y: auto; position: relative; }}
 [data-testid="stSidebarUserContent"] {{ padding: 16px 20px 14px; }}
 [data-testid="stSidebarHeader"] {{ position: absolute; top: 12px; right: 12px; z-index: 2; padding: 0;
   height: auto; min-height: 0; width: auto; }}
@@ -99,6 +99,12 @@ section[data-testid="stSidebar"] div:has(> [data-testid="stSidebarResizeHandle"]
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"],
 .stTabs .react-aria-SelectionIndicator, .stTabs [role="tablist"]::after {{ display: none; }}
 .stTabs [role="tabpanel"] {{ padding-top: 20px; }}
+/* schede annidate (Approfondimenti): sottomenu discreto, senza il titolo del sito */
+.stTabs .stTabs [role="tablist"] {{ background: transparent; box-shadow: none; padding: 0; border-radius: 0; }}
+.stTabs .stTabs [role="tablist"]::before {{ content: none; }}
+.stTabs .stTabs [role="tab"] {{ background: #fff; box-shadow: var(--shadow-soft); }}
+.stTabs .stTabs [role="tab"][aria-selected="true"] {{ background: {DEEP}; }}
+.stTabs .stTabs [role="tabpanel"] {{ padding-top: 16px; }}
 
 /* schede */
 [class*="st-key-card"] {{ position: relative; background: #fff; border: 1px solid transparent; border-radius: var(--radius-lg);
@@ -137,6 +143,11 @@ div[data-testid="stMetricValue"], div[data-testid="stMetricValue"] * {{ font-wei
 
 /* blocchi HTML: Streamlit dà margin-bottom -16px al contenitore markdown */
 [data-testid="stMarkdownContainer"]:has(> [class^="x-"]) {{ margin-bottom: 0; }}
+.x-sec {{ font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 800; color: {N700};
+  margin-top: 4px; }}
+.x-lead {{ background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 22px 26px;
+  font-size: 19px; line-height: 1.5; text-wrap: pretty; }}
+.x-lead strong {{ color: {A700}; }}
 .x-label {{ font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: {N700}; }}
 .x-metrics {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }}
 .x-metric {{ background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 20px 22px;
@@ -220,12 +231,22 @@ def metrics(items: Sequence[tuple[str, str, str]]) -> None:
     html(f'<div class="x-metrics">{cells}</div>')
 
 
+def section(text: str) -> None:
+    """Titoletto di sezione nella barra laterale."""
+    html(f'<div class="x-sec">{escape(text)}</div>')
+
+
+def lead(text_html: str) -> None:
+    """Frase di riepilogo in linguaggio semplice (l'HTML va già validato dal chiamante)."""
+    html(f'<div class="x-lead">{text_html}</div>')
+
+
 def loss_card(loss_pct: str, loss_eur: str, cost_eur: str, std_eur: str, p_profit: str, note: str = "") -> None:
     html(f"""<div class="x-loss">
-<div style="display:flex;flex-direction:column;gap:4px"><span class="k">Perdita media</span>
+<div style="display:flex;flex-direction:column;gap:4px"><span class="k">Quanto perdi in media</span>
 <span class="v">{loss_pct}</span><span class="s">{loss_eur} su {cost_eur} giocati</span></div>
-<p>Vale per qualsiasi sistema con la stessa quota: il design cambia frequenza e varianza delle vincite,
-non la perdita attesa. Dev. std del netto {std_eur} · P(chiudere in positivo) {p_profit}.{note}</p></div>""")
+<p>È uguale per qualsiasi sistema con la stessa quota: cambia solo quanto spesso vinci e quanto oscilla il
+risultato. Probabilità di chiudere in positivo: {p_profit}. Oscillazione tipica del saldo: ±{std_eur}.{note}</p></div>""")
 
 
 def error_card(msg: str) -> None:

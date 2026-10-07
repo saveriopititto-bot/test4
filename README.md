@@ -29,7 +29,7 @@ pytest
 2. Su share.streamlit.io: *New app* → scegli repo e branch → *Main file path*: `app.py`.
 3. In *Advanced settings* scegli Python 3.12 (o 3.13) e premi *Deploy*.
 
-OR-Tools è usato solo nel tab "Verifica ILP" e PuLP solo nel tab "ILP con PuLP": se uno dei due manca, il resto dell'app funziona comunque. PuLP è fissato a `<4` perché dalla 4.0 non include più il solver CBC.
+OR-Tools è usato solo nella scheda "Verifica ILP" (sotto "Approfondimenti") e PuLP solo in "ILP con PuLP": se uno dei due manca, il resto dell'app funziona comunque. PuLP è fissato a `<4` perché dalla 4.0 non include più il solver CBC.
 
 Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6, t=3).
 
@@ -41,7 +41,7 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 | `viz.py` | Grafici Plotly (grafo, distribuzione, frontiera, saldo simulato) |
 | `style.py` | Stile dell'interfaccia (layout 1a): CSS, schede arrotondate e blocchi HTML |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
-| `DOCUMENTAZIONE.md` | Documentazione completa (formule in LaTeX), mostrata anche nella scheda "Documentazione" dell'app |
+| `DOCUMENTAZIONE.md` | Documentazione completa (formule in LaTeX), mostrata anche nell'app in Approfondimenti → Documentazione |
 | `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta (controllo indipendente) |
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `app.py` | Interfaccia Streamlit |
@@ -64,7 +64,7 @@ perde lo stile, va aggiornato il selettore.
 - Minimo ambi (Turán): `t−1` cliche disgiunte bilanciate, `Σ C(n_i, 2)`.
 - Poiché escono 5 numeri, `t ≤ 5`: per `t ≥ 6` la garanzia non scatta mai.
 - Più ruote: estrazioni indipendenti, distribuzione = convoluzione.
-- Negli slider k arriva a 40; in modalità "Budget + garanzia" k può salire fino a 90 (tutta la ruota).
+- Negli slider k arriva a 40; in modalità "Ho un budget e una garanzia" k può salire fino a 90 (tutta la ruota).
 
 ## Regole di gioco applicate
 
@@ -75,10 +75,10 @@ perde lo stile, va aggiornato il selettore.
   divisa tra le combinazioni giocate e tra le ruote.
 - Importo per scontrino da 1 € a 200 €, a incrementi di 0,50 €; oltre i 200 € servono più scontrini.
 - Vincita massima 6 milioni di € per scontrino (con sole puntate su ambo non viene mai raggiunta).
-- Ritenuta dell'8% sulle vincite (disattivabile nella barra laterale per confronto).
+- Ritenuta dell'8% sulle vincite (disattivabile nelle opzioni avanzate della barra laterale per confronto).
 - Abbonamento fino a 50 concorsi consecutivi: costo e distribuzione delle vincite sommano i concorsi.
 
-Il tab **Calcolo vincite** applica le regole a uno scontrino (il sistema ridotto e/o una giocata libera su
+La scheda **Controlla una giocata** applica le regole a uno scontrino (il sistema ridotto e/o una giocata libera su
 qualsiasi sorte) contro un'estrazione casuale o inserita a mano.
 
 ## Limiti
