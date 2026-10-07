@@ -1,0 +1,230 @@
+# Come perdere al lotto: documentazione
+
+7 ottobre 2026 · Saverio Pititto
+
+## Cosa fa
+
+"Come perdere al lotto" è un'app Streamlit didattica che calcola il sistema ridotto di ambi più economico per una data garanzia e mostra quanto si perde, in media, giocandolo.
+
+L'idea di base: i numeri che scegli sono i nodi di un grafo e gli ambi che giochi sono i suoi archi. Dato un livello di garanzia $t$ (oppure un budget), l'app costruisce il sistema di costo minimo e ne calcola la distribuzione esatta delle vincite, il valore atteso e la perdita media.
+
+Il risultato chiave è che nessun design cambia la perdita attesa. Con quota ambo 250 si perde in media circa il 37,6% di quanto si gioca, circa il 42,6% con la ritenuta dell'8% sulle vincite. Cambiano solo la frequenza e la varianza delle vincite.
+
+Questo è quello che dimostra l'app: un sistema ridotto non batte il banco, redistribuisce il rischio.
+
+## Il modello matematico
+
+Su una ruota escono $d = 5$ numeri tra $N = 90$, e un ambo vince se i suoi due numeri sono tra i cinque estratti. La probabilità di un singolo ambo è quindi 10/4005, cioè 1 su 400,5.
+
+$$
+P(\text{ambo}) = \frac{\binom{5}{2}}{\binom{90}{2}} = \frac{10}{4005}
+$$
+
+### Grafo e garanzia
+
+I $k$ numeri scelti sono i nodi di un grafo $G$ e gli ambi giocati sono gli archi. La garanzia $t$ significa: se escono almeno $t$ dei tuoi $k$ numeri, vinci almeno un ambo. Equivale a dire che ogni gruppo di $t$ nodi contiene almeno un arco, cioè che il grafo non ha insiemi indipendenti di taglia $t$: $\alpha(G) \le t - 1$.
+
+Trovare il sistema più economico è un problema di programmazione lineare intera, con una variabile $x_e$ per ogni possibile ambo $e$:
+
+$$
+\min \sum_{e \subset S} x_e \quad \text{s.t.} \quad \sum_{e \subset T} x_e \ge 1 \;\; \forall\, T \subset S,\ |T| = t, \qquad x_e \in \{0,1\}
+$$
+
+### Soluzione chiusa (Turán)
+
+Il minimo si ottiene dividendo i $k$ numeri in $t-1$ gruppi il più possibile bilanciati e giocando tutti gli ambi dentro ogni gruppo ($t-1$ "cricche" disgiunte). Per il principio dei cassetti, $t$ numeri su $t-1$ gruppi ne mettono due nello stesso gruppo, e quell'ambo è giocato.
+
+$$
+|E|_{\min} = \sum_{i=1}^{t-1} \binom{n_i}{2}, \qquad n_i \in \left\{\left\lfloor \tfrac{k}{t-1} \right\rfloor,\ \left\lceil \tfrac{k}{t-1} \right\rceil\right\}
+$$
+
+Poiché escono solo 5 numeri, $t$ può arrivare al massimo a 5: per $t \ge 6$ la garanzia non scatta mai.
+
+### Distribuzione esatta delle vincite
+
+Sia $X$ quanti dei $k$ numeri escono (distribuzione ipergeometrica). Dato $X = m$, i numeri usciti sono un sottoinsieme uniforme di $m$ tra i tuoi $k$, e gli ambi vincenti sono gli archi che contiene.
+
+- Per grafi a cricche disgiunte, come quelli di Turán, si conta con una programmazione dinamica esatta.
+- Per grafi generici si enumerano gli $m$-sottoinsiemi, fino a 2,5 milioni di combinazioni.
+- Con più ruote o più concorsi indipendenti la distribuzione è la convoluzione di quella di una ruota con sé stessa, calcolata per quadrature successive.
+
+### Valore atteso
+
+Per linearità il ritorno atteso dipende solo dal numero di ambi, non da come sono disposti:
+
+$$
+E[\text{ritorno}] = |E| \cdot \text{puntata} \cdot \text{ruote} \cdot \text{concorsi} \cdot \text{quota} \cdot (1 - \text{ritenuta}) \cdot P(\text{ambo})
+$$
+
+Per questo nessun design può cambiare la perdita media: può solo cambiarne la forma, cioè quanto spesso e quanto a lungo si vince.
+
+## Come funziona il codice
+
+Il progetto sono sei moduli Python in radice più una cartella di test. `core.py` contiene la matematica, `regole.py` le regole di gioco, e `app.py` li usa per costruire l'interfaccia.
+
+| File | Cosa contiene |
+|---|---|
+| `core.py` | Design (grafo di ambi), costruzione di Turán, budget duale, distribuzione esatta (DP su cricche o enumerazione), statistiche, ILP con OR-Tools CP-SAT, Monte Carlo |
+| `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta: un controllo indipendente da `core.py`. Si può lanciare da solo con `python ilp_pulp.py` (esempio $k=6$, $t=3$) |
+| `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
+| `viz.py` | Grafici Plotly: grafo, frontiera costo/probabilità, saldo simulato |
+| `style.py` | Stile dell'interfaccia: CSS, schede arrotondate e blocchi HTML |
+| `app.py` | Interfaccia Streamlit: barra laterale e otto schede |
+| `DOCUMENTAZIONE.md` | Questa documentazione, mostrata anche nella scheda "Documentazione" |
+| `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
+| `tests/` | `test_core.py` (38 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
+
+### Flusso di un calcolo
+
+Streamlit riesegue `app.py` da capo a ogni modifica di un controllo. Ogni esecuzione fa questi passi:
+
+1. Legge la barra laterale: modalità, puntata, concorsi, ruote, quota ambo, ritenuta e i parametri della modalità scelta.
+2. Se la modalità parte da un budget, ricava $k$ oppure $t$ con `max_k_for_edges` o `best_t_for_edges`.
+3. Costruisce il sistema con `turan_design(k, t)`.
+4. Calcola le statistiche con `analyze(...)`, che restituisce un oggetto `Stats`.
+5. Disegna le schede usando quelle statistiche; i calcoli pesanti (frontiera, simulazione) sono in cache con `st.cache_data`.
+
+### Le funzioni principali di core.py
+
+| Funzione | Cosa fa |
+|---|---|
+| `turan_group_sizes(k, t)` | Taglie dei $t-1$ gruppi più bilanciati |
+| `turan_min_edges(k, t)` | Numero minimo di ambi per la garanzia $t$ |
+| `turan_design(k, t)` | Costruisce il sistema ottimo come oggetto `Design` |
+| `matching_design(n)` | Coppie disgiunte: nessuna garanzia, massima probabilità di incassare almeno una volta |
+| `wins_counts(design)` | Conteggi esatti delle cinquine per numero di ambi vincenti; la somma è $\binom{90}{5}$ |
+| `analyze(design, ...)` | Distribuzione, valore atteso, perdita %, deviazione standard, P(profitto) |
+| `solve_ilp(k, t, min_wins)` | ILP con CP-SAT; `min_wins` permette di garantire più di un ambo |
+| `simulate_wins(design, n)` | Monte Carlo con estrazioni casuali |
+| `max_k_for_edges`, `best_t_for_edges` | Problema duale: dato il budget, quanti numeri o quale garanzia |
+
+OR-Tools serve solo alla scheda "Verifica ILP" e PuLP solo a "ILP con PuLP": se uno dei due manca, il resto dell'app funziona comunque.
+
+## Le regole di gioco
+
+`regole.py` traduce le regole ufficiali del Lotto in codice e calcola la vincita di uno scontrino contro un'estrazione. Il sistema ridotto del resto dell'app usa solo l'ambo, mentre questo modulo gestisce tutte le sorti.
+
+### Ruote e limiti
+
+- 5 numeri estratti tra 1 e 90 su 10 ruote cittadine (Bari, Cagliari, Firenze, Genova, Milano, Napoli, Palermo, Roma, Torino, Venezia) e sulla ruota Nazionale.
+- "Tutte le ruote" indica le 10 cittadine: la Nazionale va aggiunta a parte.
+- Una giocata ha da 1 a 10 numeri.
+- Importo per scontrino da 1 € a 200 €, a incrementi di 0,50 €. Oltre i 200 € le giocate vanno su più scontrini.
+- Vincita massima di 6 milioni di euro per scontrino, poi ritenuta dell'8%.
+- Abbonamento fino a 50 concorsi consecutivi.
+
+### Coefficienti
+
+I coefficienti valgono per una singola ruota. La posta di ogni sorte è divisa tra le combinazioni giocate e tra le ruote.
+
+| Sorte | Coefficiente |
+|---|---:|
+| Estratto | 11,233 |
+| Estratto determinato | 55 |
+| Ambo | 250 |
+| Ambetto | 260 |
+| Terno | 4.500 |
+| Quaterna | 120.000 |
+| Cinquina | 6.000.000 |
+
+### Come si calcola una vincita
+
+Per ogni ruota e per ogni sorte puntata, `regole.py` conta quante combinazioni della giocata sono uscite. La vincita lorda è il numero di combinazioni vincenti, per la quota di ciascuna, per il coefficiente della sorte.
+
+$$
+\text{vincita lorda} = v \cdot \frac{\text{posta}}{n_{\text{comb}} \cdot n_{\text{ruote}}} \cdot \text{coefficiente}
+$$
+
+In questa formula $v$ è il numero di combinazioni vincenti e $n_{\text{comb}}$ quante ne ha la giocata. Le vincite di uno scontrino si sommano, si limitano a 6 milioni e poi si applica la ritenuta. Le giocate che superano i 200 € sono ripartite in scontrini con la funzione `dividi_in_scontrini`, che usa il criterio first-fit decrescente.
+
+### Ambetto
+
+Vince ogni coppia estratta formata da un numero giocato e dal precedente o dal successivo di un altro numero giocato (decreto dirigenziale 2013/7649). Il modello assume la numerazione circolare, quindi il precedente di 1 è 90, e che il numero vicino non sia a sua volta giocato: in quel caso la coppia sarebbe un ambo.
+
+## L'interfaccia
+
+L'app ha una barra laterale per i parametri e otto schede che mostrano i risultati. Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
+
+### Barra laterale
+
+La prima scelta è cosa fissare. Le tre modalità sono tre modi di porre lo stesso problema:
+
+| Modalità | Cosa fissi | Cosa ottieni |
+|---|---|---|
+| Garanzia → costo minimo | $k$ (3-40) e $t$ | Il sistema ridotto più economico |
+| Budget + garanzia → quanti numeri | Budget e $t$ | Il massimo $k$ coperto con quel budget |
+| Budget + numeri → garanzia migliore | Budget e $k$ (3-40) | Il $t$ più basso ottenibile |
+
+Sotto ci sono i parametri comuni:
+
+- **Puntata** per ambo e per ruota, da 0,05 €.
+- **Concorsi**, da 1 a 50 (abbonamento).
+- **Ruote**: una selezione libera oppure "Tutte le ruote" con la Nazionale opzionale.
+- **Quota ambo**, di partenza 250.
+- **Ritenuta** dell'8%, disattivabile per confronto.
+- **I tuoi numeri**, facoltativi: se li inserisci sostituiscono l'etichetta 1…k nella schedina.
+
+### Le otto schede
+
+| Scheda | Cosa mostra |
+|---|---|
+| Risultato | Ambi da giocare, costo, garanzia, P(garanzia), P(vincere almeno un ambo), perdita media. Il grafo del sistema, la distribuzione dell'esito (anche a fasce se i valori sono troppi) e la schedina scaricabile in CSV |
+| Calcolo vincite | Applica le regole a uno scontrino, con il sistema ridotto e/o una giocata libera su qualsiasi sorte, contro un'estrazione casuale (con seed) o inserita a mano |
+| Confronto | A parità di spesa, confronta il sistema ridotto con tutti gli ambi e con le coppie disgiunte, e disegna la frontiera costo contro probabilità di vincita |
+| Verifica ILP | Risolve l'ILP con CP-SAT ($k$ fino a 14) e lo confronta con Turán; permette anche di garantire $m \ge 2$ ambi |
+| ILP con PuLP | Stesso modello con PuLP/CBC ($k$ fino a 12) e metriche per enumerazione diretta, come controllo indipendente |
+| Simulazione | Monte Carlo fino a 2 milioni di estrazioni, confrontato con i valori esatti, più il saldo cumulato |
+| Modello | Riassunto teorico: setup, grafo, garanzia, ILP, Turán, distribuzione, valore atteso |
+| Documentazione | Questa documentazione |
+
+Se i parametri sono incoerenti, per esempio un budget troppo basso, la scheda mostra un messaggio d'errore invece dei risultati. Le giocate che superano i limiti di importo vengono segnalate.
+
+## Come si usa
+
+Si installano le dipendenze e si avvia con Streamlit. Le dipendenze sono Streamlit 1.50 o successivo, NumPy, pandas, Plotly, OR-Tools e PuLP (versione inferiore alla 4).
+
+### Avvio locale
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Test
+
+I 92 test passano tutti (38 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design e le regole di gioco.
+
+```bash
+pip install pytest
+pytest
+```
+
+### Esempio da riga di comando
+
+Il controllo con PuLP si può lanciare senza interfaccia: `python ilp_pulp.py` risolve $k=6$, $t=3$ e stampa le metriche.
+
+### Deploy su Streamlit Community Cloud
+
+1. Carica la cartella su un repository GitHub, con in radice `app.py`, `core.py`, `ilp_pulp.py`, `regole.py`, `style.py`, `viz.py`, `DOCUMENTAZIONE.md`, `requirements.txt` e `.streamlit/config.toml`.
+2. Su share.streamlit.io scegli *New app*, poi repository e branch, e come *Main file path* `app.py`.
+3. In *Advanced settings* scegli Python 3.12 o 3.13 e premi *Deploy*.
+
+PuLP è fissato a una versione inferiore alla 4 perché dalla 4.0 non include più il solver CBC.
+
+### Un esempio d'uso
+
+Vuoi giocare con 8 numeri e la garanzia di un ambo se ne escono 3 su una ruota. Scegli la modalità "Garanzia → costo minimo" con $k = 8$ e $t = 3$. Il sistema divide gli 8 numeri in 2 gruppi da 4 e gioca tutti gli ambi dentro ogni gruppo, cioè $2 \cdot \binom{4}{2} = 12$ ambi. La scheda Risultato mostra costo, probabilità e distribuzione, e la scheda Confronto mostra che tutti gli ambi su 8 numeri ($\binom{8}{2} = 28$) costerebbero più del doppio con la stessa perdita percentuale.
+
+## Limiti e ipotesi
+
+L'app è uno strumento didattico e non una guida per vincere: il valore atteso resta negativo qualunque sistema si scelga.
+
+- **Estrazioni indipendenti.** Con più ruote o più concorsi si assume che le estrazioni siano indipendenti, per cui la distribuzione è una convoluzione.
+- **Quali numeri scegli è indifferente.** L'estrazione è uniforme, quindi conta solo la struttura del sistema, non i numeri.
+- **Garanzia solo fino a $t = 5$.** Escono 5 numeri, quindi per $t \ge 6$ la garanzia non scatta mai.
+- **Ambetto semplificato.** Si assume la numerazione circolare e che il numero vicino non sia a sua volta giocato.
+- **Dimensioni massime.** Il sistema usa fino a 40 numeri; la modalità Budget + garanzia può salire fino a 90. L'enumerazione per grafi generici si ferma a 2,5 milioni di combinazioni, e i controlli ILP girano su $k$ fino a 14 (CP-SAT) e 12 (PuLP).
+- **Fuori dal calcolo.** Orari di raccolta e modalità di compilazione della schedina non incidono sui risultati.
+- **Stile legato a Streamlit.** Lo stile in `style.py` usa attributi interni di Streamlit (`data-testid`, `role`), testati con la versione 1.65: dopo un aggiornamento un elemento può perdere lo stile e il selettore va aggiornato.
+
+Il gioco d'azzardo può causare dipendenza ed è vietato ai minori.

@@ -25,7 +25,7 @@ pytest
 
 ## Deploy su Streamlit Community Cloud
 
-1. Carica la cartella su un repository GitHub (file in radice: `app.py`, `core.py`, `ilp_pulp.py`, `regole.py`, `style.py`, `viz.py`, `requirements.txt`, `.streamlit/config.toml`).
+1. Carica la cartella su un repository GitHub (file in radice: `app.py`, `core.py`, `ilp_pulp.py`, `regole.py`, `style.py`, `viz.py`, `DOCUMENTAZIONE.md`, `requirements.txt`, `.streamlit/config.toml`).
 2. Su share.streamlit.io: *New app* → scegli repo e branch → *Main file path*: `app.py`.
 3. In *Advanced settings* scegli Python 3.12 (o 3.13) e premi *Deploy*.
 
@@ -41,6 +41,7 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 | `viz.py` | Grafici Plotly (grafo, distribuzione, frontiera, saldo simulato) |
 | `style.py` | Stile dell'interfaccia (layout 1a): CSS, schede arrotondate e blocchi HTML |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
+| `DOCUMENTAZIONE.md` | Documentazione completa (formule in LaTeX), mostrata anche nella scheda "Documentazione" dell'app |
 | `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta (controllo indipendente) |
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `app.py` | Interfaccia Streamlit |
