@@ -87,6 +87,14 @@ su casi piccoli). Con k=8 e t=3 servono 956 ambi in più (968 in tutto) contro i
 certa". Se un gruppo di partenza è già più grande della media finale, non si può ridurre e il minimo assoluto
 di 968 non si raggiunge.
 
+## Ritardatari
+
+La scheda **Ritardatari** legge il «tabellone analitico» dei ritardi (file di testo con tabulazioni: una riga
+`Rit.` con le 11 ruote, poi una riga per ogni ritardo con 5 celle per ruota). Il file va caricato a mano: i siti
+che lo pubblicano sono protetti da controlli anti-bot e l'app non lo scarica da sola (`ritardi.py`). Mostra i
+10 numeri più in ritardo per ruota e in assoluto, e il pulsante «Usa i k più in ritardo» li inserisce in
+«I tuoi numeri». Le estrazioni sono indipendenti: un ritardo non cambia probabilità né perdita media.
+
 ## Regole di gioco applicate
 
 - 5 numeri estratti tra 1 e 90 su 10 ruote cittadine (Bari, Cagliari, Firenze, Genova, Milano, Napoli,

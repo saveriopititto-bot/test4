@@ -13,6 +13,7 @@ import streamlit as st
 
 import ilp_pulp
 import regole
+import ritardi
 import style
 import viz
 from core import (
@@ -98,7 +99,7 @@ with sb_adv, st.expander("Opzioni avanzate"):
                              help="Vincita per 1 € puntato. Coefficiente ufficiale per l'ambo su una ruota: 250.")
     tax = regole.RITENUTA if st.checkbox(f"Ritenuta {regole.RITENUTA:.0%} sulle vincite", value=True,
                                          help="Ritenuta sull'ammontare delle vincite.") else 0.0
-    numbers_text = st.text_input("I tuoi numeri", placeholder="Se vuoi, scrivili qui (es. 7, 18, 42)",
+    numbers_text = st.text_input("I tuoi numeri", placeholder="Se vuoi, scrivili qui (es. 7, 18, 42)", key="numbers_text",
                                  help="Se li lasci vuoti, nella schedina compaiono 1…k.")
 
 k: int
@@ -176,8 +177,9 @@ def summary() -> None:
                     eur(stats.std_net), pct(stats.p_profit * 100), note)
 
 
-tab_res, tab_cmp, tab_win, tab_cert, tab_path, tab_more = st.tabs(
-    ["Risultato", "Confronto", "Controlla una giocata", "Vincita certa", "Percorso minimo", "Approfondimenti"])
+tab_res, tab_cmp, tab_win, tab_cert, tab_path, tab_rit, tab_more = st.tabs(
+    ["Risultato", "Confronto", "Controlla una giocata", "Vincita certa", "Percorso minimo", "Ritardatari",
+     "Approfondimenti"])
 with tab_more:
     st.caption("Strumenti per chi vuole verificare i conti: simulazione, controlli con solver, spiegazione del "
                "modello e documentazione completa.")
@@ -532,6 +534,59 @@ with tab_path:
                 f"quindi conviene sempre il più piccolo. È il risultato di Turán con i tuoi gruppi di partenza "
                 f"come vincolo. Se un tuo gruppo è già più grande della media finale, non si può ridurre e il "
                 f"minimo assoluto non si raggiunge.")
+
+# ------------------------------------------------------------------ tab Ritardatari
+with tab_rit:
+    st.caption("Carica il tabellone dei ritardi (file di testo, una colonna di numeri ogni ruota) per vedere i "
+               "numeri più in ritardo e usarli nel tuo sistema.")
+    up = st.file_uploader("Tabellone dei ritardi", type=["txt", "tsv", "csv"], key="rit_file",
+                          help="Il file «tabellone analitico» scaricato dal sito: una riga «Rit.» con le ruote, poi "
+                               "una riga per ogni ritardo.")
+    if up is not None:
+        try:
+            st.session_state["ritardi"] = ritardi.parse_tabellone(up.getvalue().decode("utf-8", errors="replace"))
+            st.session_state["ritardi_nome"] = up.name
+        except ValueError as exc:
+            st.session_state.pop("ritardi", None)
+            style.error_card(str(exc))
+    rit_data = st.session_state.get("ritardi")
+    if rit_data is None:
+        if up is None:
+            st.info("Nessun file caricato. Scaricalo dalla pagina del tabellone analitico e trascinalo qui: "
+                    "l'app non lo scarica da sola.")
+    else:
+        with style.card("rit_note"):
+            style.title("Un ritardo non rende un numero più probabile")
+            st.markdown("Le estrazioni sono indipendenti: un numero che manca da 100 concorsi ha la stessa "
+                        "probabilità di uscire di uno uscito ieri. Scegliere i ritardatari non cambia le "
+                        "probabilità né la perdita media del sistema; serve solo a decidere *quali* numeri giocare.")
+        ruote_r = rit_data.ruote
+        sel = st.selectbox("Ruota", ruote_r, key="rit_ruota")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            with style.card("rit_top"):
+                style.title(f"Più in ritardo · {sel.title()}")
+                style.table(["#", "Numero", "Ritardo"],
+                            [[str(i + 1), str(n_), str(r_)] for i, (n_, r_) in enumerate(rit_data.top(sel, 10))])
+        with col_b:
+            with style.card("rit_abs"):
+                style.title("Più in ritardo in assoluto")
+                style.table(["#", "Ruota", "Numero", "Ritardo"],
+                            [[str(i + 1), r_.title(), str(n_), str(d_)]
+                             for i, (r_, n_, d_) in enumerate(rit_data.top_assoluti(10))])
+        scelti = [n_ for n_, _ in rit_data.top(sel, k)]
+
+        def _usa_ritardatari(nums=tuple(sorted(scelti))):
+            st.session_state["numbers_text"] = ", ".join(map(str, nums))
+
+        st.button(f"Usa i {k} più in ritardo di {sel.title()} come i miei numeri", on_click=_usa_ritardatari,
+                  help="Li inserisce in «I tuoi numeri» (Opzioni avanzate, barra laterale): tutte le schede si "
+                       "aggiornano.")
+        with st.expander("Tutti i 90 numeri"):
+            tutti = pd.DataFrame({"Numero": list(range(1, 91)),
+                                  **{r_.title(): [rit_data.per_ruota[r_][n_] for n_ in range(1, 91)]
+                                     for r_ in ruote_r}})
+            st.dataframe(tutti, hide_index=True, width="stretch", height=320)
 
 # ------------------------------------------------------------------ tab Confronto
 with tab_cmp:
