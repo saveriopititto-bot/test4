@@ -17,7 +17,7 @@ import style
 import viz
 from core import (
     AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, Design, analyze, best_t_for_edges, certain_win_design,
-    certain_win_extension, complete_design, make_design, matching_design, max_edges_for_budget,
+    certain_win_extension, complete_design, minimal_path, minimal_path_design, make_design, matching_design, max_edges_for_budget,
     max_k_for_edges, ortools_available, simulate_wins, solve_ilp, turan_design, turan_min_edges,
 )
 
@@ -176,8 +176,8 @@ def summary() -> None:
                     eur(stats.std_net), pct(stats.p_profit * 100), note)
 
 
-tab_res, tab_cmp, tab_win, tab_cert, tab_more = st.tabs(
-    ["Risultato", "Confronto", "Controlla una giocata", "Vincita certa", "Approfondimenti"])
+tab_res, tab_cmp, tab_win, tab_cert, tab_path, tab_more = st.tabs(
+    ["Risultato", "Confronto", "Controlla una giocata", "Vincita certa", "Percorso minimo", "Approfondimenti"])
 with tab_more:
     st.caption("Strumenti per chi vuole verificare i conti: simulazione, controlli con solver, spiegazione del "
                "modello e documentazione completa.")
@@ -490,6 +490,86 @@ with tab_cert:
                     f"Se potessi collegare anche i numeri già giocati, partendo da zero ne basterebbero "
                     f"**{_it(f'{cert.from_scratch_edges:,}')}** in tutto. Tenere separati i tuoi {k} numeri costa "
                     f"{_it(f'{cert.total_edges - cert.from_scratch_edges:,}')} ambi in più rispetto a quel minimo.")
+
+# ------------------------------------------------------------------ tab Percorso minimo
+with tab_path:
+    if err:
+        style.error_card(err)
+    else:
+        mp = minimal_path(k, t)
+        unit = stake * wheels * draws
+        others = [n for n in range(1, N_NUMBERS + 1) if n not in set(labels)]
+        cert_path = certain_win_extension(k, t)
+        st.caption("Il modo più economico per passare dalla tua giocata alla vincita sicura: i gruppi di numeri che "
+                   "hai già si allargano con numeri nuovi, invece di restare separati.")
+        design_p = minimal_path_design(k, t)
+        s_p = analyze(design_p, stake=stake, wheels=wheels, payout=payout, tax=tax, draws=draws)
+        j_min = next(j for j, p_ in enumerate(s_p.pmf) if p_ > 1e-12)
+        min_win = j_min * s_p.win_value
+        # numeri di ciascun gruppo (in ordine: prima i tuoi, poi i nuovi)
+        members: list[list[int]] = []
+        o_i = 0
+        n_i = 0
+        for n0, add in zip(mp.group_sizes, mp.added):
+            members.append(list(labels[o_i:o_i + n0]) + others[n_i:n_i + add])
+            o_i += n0
+            n_i += add
+        have_pairs = {tuple(sorted((labels[a], labels[b]))) for a, b in turan_design(k, t).edges}
+        extra_pairs = [p_ for g_ in members for p_ in combinations(sorted(g_), 2) if p_ not in have_pairs]
+
+        if mp.extra_edges == 0:
+            style.lead("Il tuo sistema <strong>vince già sempre</strong> almeno un ambo: non serve aggiungere nulla.")
+        else:
+            style.lead(f"Servono <strong>{_it(f'{mp.extra_edges:,}')} ambi in più</strong>, "
+                       f"<strong>{eur(mp.extra_edges * unit)}</strong>, per un totale di "
+                       f"<strong>{eur(mp.total_edges * unit)}</strong>.")
+        style.metrics([
+            ("Ambi in più", _it(f"{mp.extra_edges:,}"), "collegando anche i tuoi numeri"),
+            ("Costo totale", eur(mp.total_edges * unit), _it(f"{mp.total_edges:,}") + " ambi in tutto"),
+            ("Risparmio", eur(max(cert_path.total_edges - mp.total_edges, 0) * unit) if cert_path.possible else "—",
+             "rispetto a usare solo numeri nuovi" if cert_path.possible else "la scheda «Vincita certa» non è possibile"),
+            ("Vincita minima", eur(min_win), "se esce un solo ambo"),
+        ])
+        with style.card("path_gain"):
+            style.title("Minimo possibile")
+            st.markdown(
+                f"Partendo da zero ne servono **{_it(f'{mp.from_scratch_edges:,}')}**: è il minimo assoluto, "
+                f"raggiunto solo se i gruppi sono tutti della stessa grandezza. " +
+                (f"Il tuo percorso costa {_it(f'{mp.total_edges - mp.from_scratch_edges:,}')} ambi in più di quel "
+                 f"minimo, perché i tuoi gruppi di partenza sono già grandi." if mp.total_edges > mp.from_scratch_edges
+                 else "Il tuo percorso lo raggiunge esattamente."))
+            min_net = min_win - s_p.cost
+            st.caption(f"Nel caso peggiore incassi {eur(min_win)} contro {eur(s_p.cost)} spesi "
+                       f"({'perdi almeno ' + eur(-min_net) if min_net < 0 else 'saldo positivo ' + eur(min_net)}). "
+                       f"Perdita media: {pct(s_p.loss_pct, 1)}. Controllo: P(≥1 ambo) = "
+                       f"{pct(s_p.p_win_any * 100, 4)}.")
+        with style.card("path_groups"):
+            c = st.columns([1, 0.2], vertical_alignment="center")
+            with c[0]:
+                style.title("Come allargare i gruppi")
+            if extra_pairs:
+                ticket_p = pd.DataFrame(
+                    [{"Ambo": i + 1, "Numero A": a, "Numero B": b, "Posta (€)": round(stake * wheels, 2),
+                      "Ruote": ruote_txt, "Concorsi": draws} for i, (a, b) in enumerate(extra_pairs)])
+                c[1].download_button("Scarica CSV", ticket_p.to_csv(index=False).encode("utf-8"),
+                                     file_name=f"percorso_minimo_k{k}_t{t}.csv", mime="text/csv", width="stretch")
+            st.caption("Dentro ogni gruppo si giocano tutti gli ambi tra i numeri. Gli ambi che hai già restano; "
+                       "aggiungi quelli che coinvolgono i numeri nuovi.")
+            style.table(["Gruppo", "Prima", "Dopo", "Nuovi numeri", "Ambi in più"],
+                        [[str(i + 1), str(n0), str(n0 + add), str(add),
+                          _it(f"{comb(n0 + add, 2) - comb(n0, 2):,}")]
+                         for i, (n0, add) in enumerate(zip(mp.group_sizes, mp.added))])
+            if extra_pairs:
+                style.pairs_grid(extra_pairs)
+        with st.expander("Come si calcola"):
+            st.markdown(
+                f"Si vince sempre se ogni gruppo di {N_DRAWN} numeri contiene un ambo giocato, cioè se i numeri si "
+                f"dividono in al massimo {N_DRAWN - 1} gruppi in cui ci si gioca tutti contro tutti. Il tuo "
+                f"sistema ne ha già {t - 1}. Aggiungi {N_DRAWN - t} gruppi nuovi e assegni ogni numero rimasto, "
+                f"uno alla volta, al gruppo più piccolo: l'ambo in più costa quanto la grandezza del gruppo, "
+                f"quindi conviene sempre il più piccolo. È il risultato di Turán con i tuoi gruppi di partenza "
+                f"come vincolo. Se un tuo gruppo è già più grande della media finale, non si può ridurre e il "
+                f"minimo assoluto non si raggiunge.")
 
 # ------------------------------------------------------------------ tab Confronto
 with tab_cmp:

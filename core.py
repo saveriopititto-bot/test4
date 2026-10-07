@@ -206,6 +206,52 @@ def certain_win_design(k: int, t: int, N: int = N_NUMBERS, d: int = N_DRAWN) -> 
     return make_design("Vincita certa", edges, N)
 
 
+@dataclass(frozen=True)
+class MinimalPath:
+    """Percorso minimo dal sistema (k, t) alla vincita certa, collegando anche i numeri gia' giocati."""
+
+    group_sizes: tuple[int, ...]    # taglie dei gruppi di partenza (t-1) seguite da quelle dei gruppi nuovi
+    added: tuple[int, ...]          # numeri nuovi da inserire in ciascun gruppo (stessa lunghezza)
+    extra_edges: int                # ambi in piu' rispetto al sistema di partenza
+    total_edges: int                # ambi totali
+    from_scratch_edges: int         # minimo assoluto partendo da zero
+
+
+def minimal_path(k: int, t: int, N: int = N_NUMBERS, d: int = N_DRAWN) -> MinimalPath:
+    """Minimo di ambi da aggiungere al sistema di Turan (k, t) per vincere sempre, senza vincoli sui numeri.
+
+    Il sistema di partenza e' fatto di t-1 cliche disgiunte; la vincita certa richiede al piu' d-1 cliche che
+    coprano tutti gli N numeri (alpha <= d-1). Ogni clique di partenza si allarga, e se ne aprono d-t
+    nuove. Il costo di un gruppo e' C(n, 2), convesso: ogni numero libero va nel gruppo piu' piccolo.
+    """
+    if not 2 <= t <= min(k, d):
+        raise ValueError("Serve 2 <= t <= min(k, d)")
+    if k > N:
+        raise ValueError("k non puo' superare N")
+    start = turan_group_sizes(k, t) + [0] * (d - t)
+    sizes = list(start)
+    for _ in range(N - k):
+        sizes[sizes.index(min(sizes))] += 1
+    total = sum(comb(n, 2) for n in sizes)
+    have = turan_min_edges(k, t)
+    return MinimalPath(tuple(start), tuple(a - b for a, b in zip(sizes, start)), total - have, total,
+                       turan_min_edges(N, d))
+
+
+def minimal_path_design(k: int, t: int, N: int = N_NUMBERS, d: int = N_DRAWN) -> Design:
+    """Sistema completo del percorso minimo; i primi k nodi sono i numeri gia' giocati."""
+    mp = minimal_path(k, t, N, d)
+    edges: list[Edge] = []
+    old = 0
+    new = k
+    for n0, add in zip(mp.group_sizes, mp.added):
+        members = list(range(old, old + n0)) + list(range(new, new + add))
+        old += n0
+        new += add
+        edges += combinations(members, 2)
+    return make_design("Percorso minimo", edges, N)
+
+
 # --------------------------------------------------------------------------- #
 # Distribuzione esatta degli ambi vincenti su UNA ruota
 # --------------------------------------------------------------------------- #

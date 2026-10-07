@@ -8,7 +8,7 @@ import pytest
 from core import (
     AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, _counts_by_enumeration, analyze, best_t_for_edges,
     certain_win_design, certain_win_extension, clique_sizes, complete_design, make_design, matching_design, max_edges_for_budget,
-    max_k_for_edges, ortools_available, p_guarantee, simulate_wins, solve_ilp,
+    max_k_for_edges, minimal_path, minimal_path_design, ortools_available, p_guarantee, simulate_wins, solve_ilp,
     theoretical_ev_return, turan_design, turan_group_sizes, turan_min_edges, wins_counts, wins_pmf,
 )
 
@@ -191,3 +191,40 @@ def test_certain_win_impossible_with_t_equal_d():
     assert not ext.possible
     with pytest.raises(ValueError):
         certain_win_design(8, N_DRAWN)
+
+
+# --------------------------------------------------------------------------- #
+# Percorso minimo verso la vincita certa
+# --------------------------------------------------------------------------- #
+def _min_extra_supergraph(base_edges, N, d):
+    """Minimo di ambi da aggiungere a base_edges perche' ogni d-upla di N numeri contenga un ambo."""
+    base = {tuple(sorted(e)) for e in base_edges}
+    others = [p for p in combinations(range(N), 2) if p not in base]
+    subs = list(combinations(range(N), d))
+    for r in range(len(others) + 1):
+        for extra in combinations(others, r):
+            e = base | set(extra)
+            if all(any(p in e for p in combinations(s, 2)) for s in subs):
+                return r
+    return None
+
+
+@pytest.mark.parametrize("N,d,k,t", [(6, 3, 3, 2), (6, 3, 4, 2), (7, 3, 4, 3), (7, 3, 5, 2), (7, 4, 4, 3), (8, 4, 6, 3)])
+def test_minimal_path_matches_bruteforce(N, d, k, t):
+    mp = minimal_path(k, t, N, d)
+    assert mp.extra_edges == _min_extra_supergraph(turan_design(k, t).edges, N, d)
+
+
+@pytest.mark.parametrize("k,t", [(8, 3), (20, 2), (40, 4), (5, 5), (60, 2), (3, 2)])
+def test_minimal_path_design_always_wins(k, t):
+    des = minimal_path_design(k, t)
+    assert wins_counts(des)[0] == 0
+    assert len(des.edges) == minimal_path(k, t).total_edges
+
+
+def test_minimal_path_values():
+    mp = minimal_path(8, 3)
+    assert mp.total_edges == 968 and mp.extra_edges == 956
+    assert mp.extra_edges <= certain_win_extension(8, 3).extra_edges
+    assert minimal_path(60, 2).total_edges == 1905
+    assert minimal_path(90, 3).extra_edges == 0   # tutti i numeri sono gia' tuoi: non serve aggiungere nulla

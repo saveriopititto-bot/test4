@@ -76,6 +76,18 @@ Con $t = 5$ non ci sono gruppi disponibili: senza collegare i numeri nuovi a que
 
 Vincere sempre non vuol dire guadagnare: nel caso peggiore può uscire un solo ambo, e la perdita media resta quella di qualsiasi altro sistema con la stessa quota.
 
+### Percorso minimo
+
+La scheda "Percorso minimo" toglie il vincolo di non toccare i numeri già giocati. I $t - 1$ gruppi del sistema si allargano con numeri nuovi e se ne aprono altri $5 - t$, per un totale di al massimo 4 gruppi $n_1, \dots, n_4$ che coprono tutti i 90 numeri:
+
+$$
+|E|_{\text{totale}} = \sum_{i=1}^{4} \binom{n_i}{2}, \qquad \sum_{i=1}^{4} n_i = 90, \qquad n_i \ge n_i^{(0)}
+$$
+
+dove $n_i^{(0)}$ è la taglia di partenza di ogni gruppo ($0$ per quelli nuovi). Il costo $\binom{n}{2}$ è convesso, quindi conviene mettere ogni numero libero nel gruppo più piccolo: il risultato è il minimo possibile con i gruppi di partenza come vincolo, verificato a forza bruta su casi piccoli.
+
+Esempio: con $k = 8$ e $t = 3$ i due gruppi da 4 diventano da 23 e se ne aprono due da 22, per $2\binom{23}{2} + 2\binom{22}{2} = 968$ ambi in tutto: 956 in più, contro i 1640 della vincita certa che non tocca i numeri già giocati. Se un gruppo di partenza è già più grande della media finale non si può ridurre, e il minimo assoluto di 968 non si raggiunge (per esempio con $k = 40$, $t = 2$).
+
 ## Come funziona il codice
 
 Il progetto sono sei moduli Python in radice più una cartella di test. `core.py` contiene la matematica, `regole.py` le regole di gioco, e `app.py` li usa per costruire l'interfaccia.
@@ -87,10 +99,10 @@ Il progetto sono sei moduli Python in radice più una cartella di test. `core.py
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `viz.py` | Grafici Plotly: grafo, frontiera costo/probabilità, saldo simulato |
 | `style.py` | Stile dell'interfaccia: CSS, schede arrotondate e blocchi HTML |
-| `app.py` | Interfaccia Streamlit: barra laterale, cinque schede principali e cinque sottoschede in "Approfondimenti" |
+| `app.py` | Interfaccia Streamlit: barra laterale, sei schede principali e cinque sottoschede in "Approfondimenti" |
 | `DOCUMENTAZIONE.md` | Questa documentazione, mostrata anche in Approfondimenti → Documentazione |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
-| `tests/` | `test_core.py` (50 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
+| `tests/` | `test_core.py` (63 test), `test_ilp_pulp.py` (11), `test_regole.py` (43) |
 
 ### Flusso di un calcolo
 
@@ -117,6 +129,8 @@ Streamlit riesegue `app.py` da capo a ogni modifica di un controllo. Ogni esecuz
 | `max_k_for_edges`, `best_t_for_edges` | Problema duale: dato il budget, quanti numeri o quale garanzia |
 | `certain_win_extension(k, t)` | Ambi da aggiungere sui numeri non ancora giocati per vincere sempre almeno un ambo (oggetto `CertainWin`) |
 | `certain_win_design(k, t)` | Sistema completo per la vincita certa: quello di partenza più l'aggiunta, su tutti i 90 numeri |
+| `minimal_path(k, t)` | Percorso minimo verso la vincita certa allargando anche i gruppi già giocati (oggetto `MinimalPath`) |
+| `minimal_path_design(k, t)` | Sistema completo del percorso minimo, su tutti i 90 numeri |
 
 OR-Tools serve solo alla sottoscheda "Verifica ILP" e PuLP solo a "ILP con PuLP" (entrambe in "Approfondimenti"): se uno dei due manca, il resto dell'app funziona comunque.
 
@@ -163,7 +177,7 @@ Vince ogni coppia estratta formata da un numero giocato e dal precedente o dal s
 
 ## L'interfaccia
 
-L'app ha una barra laterale per i parametri e cinque schede che mostrano i risultati; gli strumenti di verifica sono raccolti nella scheda "Approfondimenti". Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
+L'app ha una barra laterale per i parametri e sei schede che mostrano i risultati; gli strumenti di verifica sono raccolti nella scheda "Approfondimenti". Lo stile è a pillole e schede bianche arrotondate, con palette sky blue, blue green, deep space blue, amber flame e princeton orange, e font Archivo.
 
 ### Barra laterale
 
@@ -199,6 +213,7 @@ La barra laterale è divisa in tre passi numerati più le opzioni avanzate.
 | Confronto | A parità di spesa, confronta il sistema ridotto con tutti gli ambi e con le coppie disgiunte, e disegna la frontiera costo contro probabilità di vincita |
 | Controlla una giocata | In tre passi: cosa giochi (il sistema ridotto e/o una giocata tua su qualsiasi sorte), l'estrazione (casuale, con un numero per cambiarla, o inserita a mano, solo per le ruote che giochi) e l'esito con le regole ufficiali, spiegato passaggio per passaggio |
 | Vincita certa | Quanti ambi aggiungere, sui numeri non ancora giocati, per vincere sempre almeno un ambo: costo in più, vincita minima, i gruppi da giocare (anche in CSV) e perché vincere sempre non vuol dire guadagnare |
+| Percorso minimo | Il modo più economico per arrivare alla vincita certa allargando anche i gruppi già giocati: ambi in più, risparmio rispetto a "Vincita certa", come allargare ogni gruppo (anche in CSV) |
 | Approfondimenti | Cinque sottoschede per chi vuole verificare i conti (sotto) |
 
 Le sottoschede di "Approfondimenti":
@@ -226,7 +241,7 @@ streamlit run app.py
 
 ### Test
 
-I 104 test passano tutti (50 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design, le regole di gioco e che la vincita certa sia minima (confronto con la ricerca esaustiva su casi piccoli) e vinca davvero sempre.
+I 117 test passano tutti (63 per `core.py`, 11 per `ilp_pulp.py`, 43 per `regole.py`). Controllano tra l'altro che Turán coincida con l'ILP, le probabilità note, l'indipendenza del valore atteso dal design, le regole di gioco e che vincita certa e percorso minimo usino davvero il minimo di ambi (confronto con la ricerca esaustiva su casi piccoli) e vincano sempre.
 
 ```bash
 pip install pytest
