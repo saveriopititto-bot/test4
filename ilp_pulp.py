@@ -6,7 +6,6 @@ Eseguibile anche da riga di comando: `python ilp_pulp.py`.
 """
 from __future__ import annotations
 
-import importlib.util
 import itertools
 import math
 from dataclasses import dataclass
@@ -18,11 +17,12 @@ QUOTA_AMBO = 250.0
 
 def pulp_available() -> bool:
     """PuLP installato e con CBC incluso (PuLP < 4: la 4.0 ha rimosso CBC e LpVariable.dicts)."""
-    if importlib.util.find_spec("pulp") is None:
-        return False
-    import pulp
+    try:
+        import pulp
 
-    return hasattr(pulp, "PULP_CBC_CMD") and pulp.PULP_CBC_CMD(msg=False).available()
+        return hasattr(pulp, "PULP_CBC_CMD") and bool(pulp.PULP_CBC_CMD(msg=False).available())
+    except Exception:
+        return False
 
 
 def turan_minimum_ambos(k: int, t: int) -> int:
