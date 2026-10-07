@@ -18,6 +18,7 @@ N100, N200, N300, N400, N500, N700 = "#f2f8fb", "#e2eef4", "#c9dde7", "#a5c2d1",
 A100, A600, A700 = "#fff3e6", "#e07600", "#a65600"
 
 BRAND = "Sistemi ridotti · Ambi al Lotto"
+SIDEBAR_W = 340  # larghezza fissa della barra laterale (scheda + 20px di margine sinistro)
 
 CSS = f"""
 <style>
@@ -36,14 +37,32 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 [data-testid="stMainBlockContainer"] {{ padding: 20px 20px 40px; max-width: none; }}
 [data-testid="stMain"] [data-testid="stVerticalBlock"] {{ gap: 20px; }}
 
-/* barra laterale: scheda bianca */
+/* barra laterale: scheda bianca a larghezza fissa, alta quanto la finestra, senza scroll interno;
+   20px di margine esterno = stesso spazio che separa le schede della pagina centrale */
 section[data-testid="stSidebar"] {{ background: transparent; border: 0; }}
+section[data-testid="stSidebar"][aria-expanded="true"] {{ width: {SIDEBAR_W}px !important;
+  min-width: {SIDEBAR_W}px !important; max-width: {SIDEBAR_W}px !important; }}
 section[data-testid="stSidebar"] > div {{ background: transparent; }}
+section[data-testid="stSidebar"] div:has(> [data-testid="stSidebarResizeHandle"]) {{ display: none; }}
 [data-testid="stSidebarContent"] {{ background: #fff; border-radius: var(--radius-lg); margin: 20px 0 20px 20px;
-  box-shadow: var(--shadow-soft); height: calc(100% - 40px); }}
-[data-testid="stSidebarUserContent"] {{ padding: 8px 24px 24px; }}
-[data-testid="stSidebarHeader"] {{ padding-bottom: 0; height: auto; min-height: 40px; }}
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{ gap: 18px; }}
+  box-shadow: var(--shadow-soft); width: calc(100% - 20px) !important; height: calc(100vh - 40px);
+  padding: 0; overflow: hidden; position: relative; }}
+[data-testid="stSidebarUserContent"] {{ padding: 16px 20px 14px; }}
+[data-testid="stSidebarHeader"] {{ position: absolute; top: 12px; right: 12px; z-index: 2; padding: 0;
+  height: auto; min-height: 0; width: auto; }}
+[data-testid="stSidebarHeader"] [data-testid="stLogoSpacer"] {{ display: none; }}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{ gap: 10px; }}
+[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {{ gap: 10px; }}
+[data-testid="stSidebar"] [data-baseweb="input"], [data-testid="stSidebar"] [data-testid="stNumberInputContainer"] {{
+  height: 36px; }}
+[data-testid="stSidebar"] [data-baseweb="select"] > div {{ min-height: 36px; }}
+/* schermi bassi: spazi ridotti perche' la barra laterale entri senza scroll */
+@media (max-height: 760px) {{
+  [data-testid="stSidebarUserContent"] {{ padding: 12px 20px 10px; }}
+  [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{ gap: 6px; }}
+  [data-testid="stSidebar"] .stRadio [role="radiogroup"] {{ gap: 0; }}
+  [data-testid="stSidebar"] .stSlider {{ margin-top: -4px; margin-bottom: -6px; }}
+}}
 [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{ font-size: 12px; color: {N700}; }}
 [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] p {{ font-size: 13px; font-weight: 800;
   letter-spacing: .08em; text-transform: uppercase; color: {N700}; }}
@@ -135,7 +154,7 @@ div[data-testid="stMetricValue"], div[data-testid="stMetricValue"] * {{ font-wei
 .x-table {{ width: 100%; margin: 0; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }}
 .x-table th {{ text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: {N700};
   padding: 8px; border: 0; font-weight: 400; background: transparent; }}
-.x-table td {{ padding: 8px; border: 0; }}
+.x-table td {{ padding: 8px; border: 0; white-space: nowrap; }}
 .x-table tbody tr:nth-child(odd) td {{ background: {N100}; }}
 .x-table tbody tr td:first-child {{ border-radius: 10px 0 0 10px; font-weight: 600; }}
 .x-table tbody tr td:last-child {{ border-radius: 0 10px 10px 0; }}
@@ -145,12 +164,15 @@ div[data-testid="stMetricValue"], div[data-testid="stMetricValue"] * {{ font-wei
 .x-pairs div {{ padding: 7px 10px; background: {N100}; border-radius: 10px; font-size: 13px;
   font-variant-numeric: tabular-nums; display: flex; gap: 6px; }}
 .x-pairs span {{ color: {N700}; }}
-.x-nums {{ display: flex; flex-direction: column; gap: 6px; background: {N100}; border-radius: var(--radius-md); padding: 14px 16px; }}
-.x-nums h6 {{ margin: 0; padding: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: {N700}; }}
-.x-nums div {{ font-size: 14px; line-height: 1.5; font-variant-numeric: tabular-nums; }}
+.x-nums {{ display: flex; align-items: baseline; gap: 10px; background: {N100}; border-radius: var(--radius-md); padding: 8px 14px; }}
+.x-nums h6 {{ margin: 0; padding: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: {N700};
+  white-space: nowrap; }}
+.x-nums div {{ font-size: 13px; line-height: 1.45; font-variant-numeric: tabular-nums;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
 .stApp .x-note {{ font-size: 12px; line-height: 1.45; color: {N700}; margin: 0; }}
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{ font-size: 12px; line-height: 1.45; color: {N700}; }}
-[data-testid="stSidebar"] [data-testid="stElementContainer"]:has([data-testid="stCaptionContainer"]) {{ margin-top: -12px; }}
+[data-testid="stSidebar"] [data-testid="stElementContainer"]:has([data-testid="stCaptionContainer"]) {{ margin-top: -6px; }}
+[data-testid="stSidebar"] .x-note {{ font-size: 11px; }}
 .x-kicker {{ font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: {ORANGE}; }}
 .x-kcard {{ background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 24px; }}
 .x-kcard p {{ margin: 8px 0 0; font-size: 15px; text-wrap: pretty; }}
@@ -226,7 +248,10 @@ def pairs_grid(pairs: Sequence[tuple[int, int]], limit: int = 400) -> None:
 
 
 def numbers_box(k: int, labels: Sequence[int]) -> None:
-    html(f'<div class="x-nums"><h6>Numeri in gioco · {k}</h6><div>{", ".join(map(str, labels))}</div></div>')
+    """Numeri in gioco: "1–k" se sono quelli predefiniti, altrimenti l'elenco (al massimo due righe)."""
+    nums = f"1–{k}" if list(labels) == list(range(1, k + 1)) else ", ".join(map(str, labels))
+    full = escape(", ".join(map(str, labels)))
+    html(f'<div class="x-nums" title="{full}"><h6>In gioco · {k}</h6><div>{escape(nums)}</div></div>')
 
 
 def kicker_cards(items: Sequence[tuple[str, str]]) -> None:

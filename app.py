@@ -69,25 +69,28 @@ mode = sb_mode.radio("Cosa vuoi fissare?", [MODE_1, MODE_2, MODE_3])
 
 with sb_money:
     c = st.columns(2)
-    stake = c[0].number_input("Puntata/ambo/ruota (€)", min_value=0.05, value=1.0, step=0.05,
-                              help="Importo per scontrino tra 1 e 200 €, a incrementi di 0,50 €.")
+    stake = c[0].number_input("Puntata (€)", min_value=0.05, value=1.0, step=0.05,
+                              help="Posta per ogni ambo e per ogni ruota. Importo per scontrino tra 1 e 200 €, "
+                                   "a incrementi di 0,50 €.")
     draws = int(c[1].number_input("Concorsi", min_value=1, max_value=regole.MAX_CONCORSI, value=1, step=1,
                                   help=f"Abbonamento: stessa giocata per più concorsi, fino a {regole.MAX_CONCORSI}."))
-    if st.checkbox("Tutte le ruote (le 10 cittadine)",
-                   help="Le giocate \"su tutte le ruote\" non comprendono la ruota Nazionale."):
+    if st.checkbox("Tutte le ruote",
+                   help="Le 10 ruote cittadine: le giocate \"su tutte le ruote\" non comprendono la Nazionale."):
         ruote = regole.RUOTE_CITTADINE
-        if st.checkbox("Aggiungi la ruota Nazionale"):
+        if st.checkbox("Anche la Nazionale"):
             ruote += (regole.NAZIONALE,)
     else:
-        ruote = tuple(st.multiselect("Ruote", regole.RUOTE, default=["Bari"],
-                                     help="Stessi ambi su più ruote: estrazioni indipendenti."))
+        ruote = tuple(st.multiselect("Ruote", regole.RUOTE, default=["Bari"], label_visibility="collapsed",
+                                     placeholder="Scegli le ruote"))
         if not ruote:
             st.error("Scegli almeno una ruota.")
             st.stop()
     wheels = len(ruote)
-    payout = st.number_input("Quota ambo (× puntata)", min_value=1.0, value=AMBO_PAYOUT, step=10.0,
-                             help="Coefficiente ufficiale per l'ambo su una singola ruota: 250.")
-    tax = regole.RITENUTA if st.checkbox(f"Ritenuta {regole.RITENUTA:.0%} sulle vincite", value=True) else 0.0
+    c = st.columns([1.2, 1], vertical_alignment="bottom")
+    payout = c[0].number_input("Quota ambo", min_value=1.0, value=AMBO_PAYOUT, step=10.0,
+                               help="Vincita per 1 € puntato. Coefficiente ufficiale per l'ambo su una ruota: 250.")
+    tax = regole.RITENUTA if c[1].checkbox(f"Ritenuta {regole.RITENUTA:.0%}", value=True,
+                                           help="Ritenuta sull'ammontare delle vincite.") else 0.0
 
 k: int
 t: int
@@ -96,12 +99,10 @@ budget: float | None = None
 with sb_params:
     if mode == MODE_1:
         k = st.slider("Numeri scelti (k)", 3, 40, 8)
-        t = st.slider("Garanzia t", 2, min(N_DRAWN, k), min(3, k))
-        st.caption(T_HELP)
+        t = st.slider("Garanzia t", 2, min(N_DRAWN, k), min(3, k), help=T_HELP)
     elif mode == MODE_2:
         budget = st.number_input("Budget totale (€)", min_value=0.0, value=20.0, step=1.0)
-        t = st.slider("Garanzia t", 2, N_DRAWN, 3)
-        st.caption(T_HELP)
+        t = st.slider("Garanzia t", 2, N_DRAWN, 3, help=T_HELP)
         k_best = max_k_for_edges(t, max_edges_for_budget(budget, stake, wheels * draws))
         if k_best is None:
             err = f"Con {eur(budget)} non si copre nemmeno il minimo: serve almeno {eur(stake * wheels * draws)}."
@@ -120,13 +121,14 @@ with sb_params:
             t = t_best
 
 with sb_nums:
-    numbers_text = st.text_input("I tuoi numeri (opzionale)", placeholder=f"{k} numeri separati da virgola")
+    numbers_text = st.text_input("I tuoi numeri (opzionale)", label_visibility="collapsed",
+                                 placeholder=f"I tuoi {k} numeri (opzionale)")
     labels, num_err = parse_numbers(numbers_text, k)
     if num_err:
         style.html(f'<p class="x-note" style="color:{style.A700};margin-top:-12px">{num_err}</p>')
     style.numbers_box(k, labels)
-    style.html('<p class="x-note">Strumento didattico. Il gioco d\'azzardo può causare dipendenza '
-               'ed è vietato ai minori.</p>')
+    style.html('<p class="x-note">Strumento didattico. Il gioco d\'azzardo può causare dipendenza ed è vietato '
+               'ai minori.</p>')
 
 # ------------------------------------------------------------------ calcolo principale
 design = turan_design(k, t)
