@@ -36,7 +36,7 @@ OR-Tools è usato solo nel tab "Verifica ILP": se l'import fallisce, il resto de
 | `core.py` | Turán, budget duale, distribuzione esatta (DP su cliche / enumerazione), statistiche, ILP CP-SAT, Monte Carlo |
 | `viz.py` | Grafici Plotly (grafo, distribuzione, frontiera, saldo simulato) |
 | `app.py` | Interfaccia Streamlit |
-| `tests/test_core.py` | 28 test: Turán vs ILP, probabilità note, EV indipendente dal design, simulazione |
+| `tests/test_core.py` | 38 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione |
 
 ## Modello in breve
 
@@ -45,6 +45,7 @@ OR-Tools è usato solo nel tab "Verifica ILP": se l'import fallisce, il resto de
 - Minimo ambi (Turán): `t−1` cliche disgiunte bilanciate, `Σ C(n_i, 2)`.
 - Poiché escono 5 numeri, `t ≤ 5`: per `t ≥ 6` la garanzia non scatta mai.
 - Più ruote: estrazioni indipendenti, distribuzione = convoluzione.
+- Negli slider k arriva a 40; in modalità "Budget + garanzia" k può salire fino a 90 (tutta la ruota).
 
 ## Limiti
 

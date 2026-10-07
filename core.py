@@ -11,6 +11,7 @@ E[ritorno] = n_ambi * puntata * ruote * quota * P(ambo).
 """
 from __future__ import annotations
 
+import importlib.util
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import chain, combinations
@@ -273,11 +274,7 @@ def theoretical_ev_return(n_edges: int, stake: float, wheels: int, payout: float
 # ILP (OR-Tools CP-SAT)
 # --------------------------------------------------------------------------- #
 def ortools_available() -> bool:
-    try:
-        import ortools  # noqa: F401
-        return True
-    except Exception:
-        return False
+    return importlib.util.find_spec("ortools") is not None
 
 
 @dataclass(frozen=True)

@@ -334,7 +334,7 @@ un m-sottoinsieme uniforme di S e gli ambi vincenti sono gli archi che contiene.
 si conta con una programmazione dinamica esatta; per grafi generici si enumerano gli m-sottoinsiemi.
 Con più ruote (estrazioni indipendenti) la distribuzione è la convoluzione.
 
-**Valore atteso.** Per linearità, E[ritorno] = |E| · puntata · ruote · quota · P(ambo): con quota 250 si
+**Valore atteso.** Per linearità, E[ritorno] = |E| · puntata · ruote · quota · P(ambo): con quota {_it(f'{payout:g}')} si
 recupera in media il {_it(f'{payout * P_AMBO * 100:.2f}')}% di quanto giocato per qualsiasi design.
 
 **Limiti.** Quota e puntata sono parametri; tasse sulle vincite, limiti di puntata e regole di
