@@ -37,7 +37,7 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 
 | File | Contenuto |
 |---|---|
-| `core.py` | Turán, budget duale, distribuzione esatta (DP su cliche / enumerazione), statistiche, ILP CP-SAT, Monte Carlo |
+| `core.py` | Turán, budget duale, distribuzione esatta (DP su cliche / enumerazione), vincita certa, statistiche, ILP CP-SAT, Monte Carlo |
 | `viz.py` | Grafici Plotly (grafo, distribuzione, frontiera, saldo simulato) |
 | `style.py` | Stile dell'interfaccia (layout 1a): CSS, schede arrotondate e blocchi HTML |
 | `.streamlit/config.toml` | Tema: palette e angoli arrotondati |
@@ -45,7 +45,7 @@ Il modulo PuLP si può lanciare anche da solo: `python ilp_pulp.py` (esempio k=6
 | `ilp_pulp.py` | ILP con PuLP/CBC e metriche per enumerazione diretta (controllo indipendente) |
 | `regole.py` | Regole ufficiali: ruote, coefficienti di tutte le sorti, ambetto, limiti di importo, tetto di vincita, ritenuta, abbonamento; calcolo delle vincite di uno scontrino |
 | `app.py` | Interfaccia Streamlit |
-| `tests/test_core.py` | 38 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione |
+| `tests/test_core.py` | 50 test: Turán vs ILP, probabilità note, EV indipendente dal design, budget, simulazione, vincita certa |
 | `tests/test_ilp_pulp.py` | 11 test: ottimo PuLP = Turán, metriche identiche a `core.py` |
 | `tests/test_regole.py` | 43 test: regole di gioco e calcolo vincite (anche su più scontrini), ritenuta e concorsi nel modello |
 
@@ -65,6 +65,17 @@ perde lo stile, va aggiornato il selettore.
 - Poiché escono 5 numeri, `t ≤ 5`: per `t ≥ 6` la garanzia non scatta mai.
 - Più ruote: estrazioni indipendenti, distribuzione = convoluzione.
 - Negli slider k arriva a 40; in modalità "Ho un budget e una garanzia" k può salire fino a 90 (tutta la ruota).
+
+## Vincita certa
+
+La scheda **Vincita certa** parte dal sistema della pagina principale (k numeri, garanzia t) e calcola
+quanti ambi servono ancora, usando solo i numeri non ancora giocati, per vincere sempre almeno un ambo
+su una ruota. Su una ruota escono 5 numeri: si vince sempre se ogni gruppo di 5 numeri contiene un ambo
+giocato, cioè se α(G) ≤ 4. Il sistema di partenza ha α = t−1 e i nuovi ambi non toccano i suoi numeri,
+quindi sui numeri liberi restano 5−t gruppi indipendenti e il minimo è ancora quello di Turán
+(`certain_win_extension` in `core.py`). Con t = 5 e numeri liberi non è possibile senza collegarli ai
+numeri già giocati. Partendo da zero basterebbero 968 ambi in tutto; mantenere separati i numeri già
+giocati costa di più. Anche con la vincita certa il saldo resta negativo: la perdita media non cambia.
 
 ## Regole di gioco applicate
 

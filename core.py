@@ -154,6 +154,59 @@ def max_k_for_edges(t: int, max_edges: int, k_cap: int = N_NUMBERS) -> int | Non
 
 
 # --------------------------------------------------------------------------- #
+# Vincita certa (probabilita' 100% di almeno un ambo su una ruota)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class CertainWin:
+    """Ambi da aggiungere, sui soli numeri non ancora giocati, per vincere sempre almeno un ambo."""
+
+    possible: bool
+    extra_groups: tuple[int, ...]   # taglie dei gruppi (cliche) sui numeri non ancora giocati
+    extra_edges: int                # ambi in piu' rispetto al sistema di partenza
+    total_edges: int                # ambi totali (sistema di partenza + aggiunta)
+    from_scratch_edges: int         # minimo assoluto partendo da zero, senza vincoli sui numeri
+
+
+def certain_win_extension(k: int, t: int, N: int = N_NUMBERS, d: int = N_DRAWN) -> CertainWin:
+    """Ambi da aggiungere al sistema di Turan (k, t) per vincere sempre, usando solo gli altri N-k numeri.
+
+    Su una ruota escono d numeri: si vince sempre se ogni gruppo di d numeri contiene un ambo giocato,
+    cioe' se alpha(G) <= d-1. Il sistema di partenza ha alpha = t-1 e i nuovi ambi non toccano i suoi
+    numeri, quindi alpha si somma: sui numeri liberi restano d-t gruppi indipendenti, e il minimo di
+    ambi e' ancora quello di Turan. Se d-t = 0 (t = d) e restano numeri liberi, ognuno resta isolato e
+    non basta: senza collegarlo ai numeri gia' giocati la vincita certa e' impossibile.
+    """
+    if not 2 <= t <= min(k, d):
+        raise ValueError("Serve 2 <= t <= min(k, d)")
+    if k > N:
+        raise ValueError("k non puo' superare N")
+    have = turan_min_edges(k, t)
+    scratch = turan_min_edges(N, d)
+    free = N - k
+    if free == 0:
+        return CertainWin(True, (), 0, have, scratch)
+    groups = d - t
+    if groups < 1:
+        return CertainWin(False, (), 0, have, scratch)
+    sizes = tuple(turan_group_sizes(free, groups + 1))
+    extra = sum(comb(n, 2) for n in sizes)
+    return CertainWin(True, sizes, extra, have + extra, scratch)
+
+
+def certain_win_design(k: int, t: int, N: int = N_NUMBERS, d: int = N_DRAWN) -> Design:
+    """Sistema completo (di partenza + aggiunta) su N nodi: i primi k sono i numeri gia' giocati."""
+    ext = certain_win_extension(k, t, N, d)
+    if not ext.possible:
+        raise ValueError("Vincita certa impossibile senza collegare i numeri gia' giocati")
+    edges: list[Edge] = list(turan_design(k, t).edges)
+    start = k
+    for n in ext.extra_groups:
+        edges += combinations(range(start, start + n), 2)
+        start += n
+    return make_design("Vincita certa", edges, N)
+
+
+# --------------------------------------------------------------------------- #
 # Distribuzione esatta degli ambi vincenti su UNA ruota
 # --------------------------------------------------------------------------- #
 def _counts_from_cliques(sizes: Sequence[int], N: int, d: int) -> list[int]:

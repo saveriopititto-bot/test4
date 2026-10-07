@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import re
+from itertools import combinations
 from math import comb
 from pathlib import Path
 
@@ -15,9 +16,9 @@ import regole
 import style
 import viz
 from core import (
-    AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, Design, analyze, best_t_for_edges, complete_design,
-    make_design, matching_design, max_edges_for_budget, max_k_for_edges, ortools_available,
-    simulate_wins, solve_ilp, turan_design, turan_min_edges,
+    AMBO_PAYOUT, N_DRAWN, N_NUMBERS, P_AMBO, Design, analyze, best_t_for_edges, certain_win_design,
+    certain_win_extension, complete_design, make_design, matching_design, max_edges_for_budget,
+    max_k_for_edges, ortools_available, simulate_wins, solve_ilp, turan_design, turan_min_edges,
 )
 
 st.set_page_config(page_title="Come perdere al lotto", page_icon="🎯", layout="wide")
@@ -175,8 +176,8 @@ def summary() -> None:
                     eur(stats.std_net), pct(stats.p_profit * 100), note)
 
 
-tab_res, tab_cmp, tab_win, tab_more = st.tabs(
-    ["Risultato", "Confronto", "Controlla una giocata", "Approfondimenti"])
+tab_res, tab_cmp, tab_win, tab_cert, tab_more = st.tabs(
+    ["Risultato", "Confronto", "Controlla una giocata", "Vincita certa", "Approfondimenti"])
 with tab_more:
     st.caption("Strumenti per chi vuole verificare i conti: simulazione, controlli con solver, spiegazione del "
                "modello e documentazione completa.")
@@ -356,6 +357,101 @@ with tab_win:
                     st.markdown("Nessuna combinazione vincente.")
     elif not giocate:
         st.caption("Includi il sistema o aggiungi una giocata per calcolare le vincite.")
+
+# ------------------------------------------------------------------ tab Vincita certa
+with tab_cert:
+    if err:
+        style.error_card(err)
+    else:
+        cert = certain_win_extension(k, t)
+        unit = stake * wheels * draws               # costo di ogni ambo giocato
+        free = N_NUMBERS - k
+        st.caption("Parte dal sistema della pagina principale e calcola quanti ambi servono ancora, usando solo i "
+                   "numeri che non hai già giocato, per vincere sempre almeno un ambo (probabilità 100% su ogni ruota).")
+        if not cert.possible:
+            style.error_card(f"Con la garanzia t = {t} non si arriva al 100% usando solo numeri nuovi.")
+            with style.card("cert_why"):
+                st.markdown(
+                    f"Su una ruota escono {N_DRAWN} numeri e si vince sempre solo se, tra qualsiasi {N_DRAWN} numeri, "
+                    f"almeno due formano un ambo giocato. Il tuo sistema usa già {t - 1} gruppi di numeri che non si "
+                    f"giocano tra loro e ne ammette al massimo {N_DRAWN - 1}: un numero nuovo, non collegato ai tuoi, "
+                    f"ne aggiungerebbe uno e porterebbe a {N_DRAWN} la possibilità di estrarre {N_DRAWN} numeri senza "
+                    f"nessun ambo giocato.\n\nPer arrivare al 100% dovresti collegare i numeri nuovi a quelli già "
+                    f"giocati (qui esclusi) oppure scegliere una garanzia più bassa, con t ≤ {N_DRAWN - 1}.")
+        else:
+            others = [n for n in range(1, N_NUMBERS + 1) if n not in set(labels)]
+            groups: list[list[int]] = []
+            pos_ = 0
+            for n_ in cert.extra_groups:
+                groups.append(others[pos_:pos_ + n_])
+                pos_ += n_
+            extra_pairs = [p_ for g_ in groups for p_ in combinations(g_, 2)]
+            total_design = certain_win_design(k, t)
+            s_tot = analyze(total_design, stake=stake, wheels=wheels, payout=payout, tax=tax, draws=draws)
+            j_min = next(j for j, p_ in enumerate(s_tot.pmf) if p_ > 1e-12)
+            min_win = j_min * s_tot.win_value
+            min_net = min_win - s_tot.cost
+            n_sc = regole.scontrini_necessari(cert.total_edges * stake * wheels)
+
+            if cert.extra_edges == 0:
+                style.lead("Il tuo sistema <strong>vince già sempre</strong> almeno un ambo: non serve aggiungere nulla.")
+            else:
+                style.lead(f"Per essere sicuro di vincere almeno un ambo devi aggiungere "
+                           f"<strong>{_it(f'{cert.extra_edges:,}')} ambi</strong> sugli altri <strong>{free} numeri"
+                           f"</strong>: <strong>{eur(cert.extra_edges * unit)}</strong> in più, "
+                           f"<strong>{eur(s_tot.cost)}</strong> in tutto.")
+            style.metrics([
+                ("Ambi in più", _it(f"{cert.extra_edges:,}"), f"su {free} numeri nuovi"),
+                ("Costo in più", eur(cert.extra_edges * unit), f"{eur(unit)} per ambo"),
+                ("Costo totale", eur(s_tot.cost), _it(f"{cert.total_edges:,}") + " ambi in tutto"),
+                ("Vincita minima", eur(min_win), "se esce un solo ambo"),
+            ])
+            with style.card("cert_gain"):
+                style.title("Vincere sempre non vuol dire guadagnare")
+                if min_net < 0:
+                    st.markdown(
+                        f"Nel caso peggiore esce un solo ambo e incassi {eur(min_win)} a fronte di {eur(s_tot.cost)} "
+                        f"spesi: perdi almeno **{eur(-min_net)}**. In media la perdita resta del "
+                        f"**{pct(s_tot.loss_pct, 1)}**, come per qualsiasi altro sistema con la stessa quota.")
+                else:
+                    st.markdown(f"Con questa quota anche il caso peggiore chiude in positivo: almeno "
+                                f"**{eur(min_net)}** di saldo. In media si perde comunque il "
+                                f"**{pct(s_tot.loss_pct, 1)}**.")
+                st.caption(f"Controllo: probabilità di vincere almeno un ambo con il sistema completo = "
+                           f"{pct(s_tot.p_win_any * 100, 4)}.")
+                if n_sc > 1:
+                    st.caption(f"Importo per concorso {eur(cert.total_edges * stake * wheels)}: oltre il massimo di "
+                               f"{eur(regole.IMPORTO_MAX)} per scontrino servono almeno {n_sc} scontrini.")
+
+            if cert.extra_edges:
+                ticket_extra = pd.DataFrame(
+                    [{"Ambo": i + 1, "Numero A": a, "Numero B": b, "Posta (€)": round(stake * wheels, 2),
+                      "Ruote": ruote_txt, "Concorsi": draws} for i, (a, b) in enumerate(extra_pairs)])
+                with style.card("cert_add"):
+                    c = st.columns([1, 0.2], vertical_alignment="center")
+                    with c[0]:
+                        style.title(f"Cosa aggiungere · {_it(f'{cert.extra_edges:,}')} ambi")
+                    c[1].download_button("Scarica CSV", ticket_extra.to_csv(index=False).encode("utf-8"),
+                                         file_name=f"ambi_in_piu_k{k}_t{t}.csv", mime="text/csv", width="stretch")
+                    st.caption("Dividi i numeri nuovi in questi gruppi e gioca tutti gli ambi dentro ogni gruppo.")
+                    style.table(["Gruppo", "Numeri", "Ambi", "Quali numeri"],
+                                [[str(i + 1), str(len(g_)), _it(f"{comb(len(g_), 2):,}"),
+                                  '<div style="white-space:normal;min-width:320px">' + ", ".join(map(str, g_)) + "</div>"]
+                                 for i, g_ in enumerate(groups) if g_])
+                    style.pairs_grid(extra_pairs)
+
+            with st.expander("Come si calcola"):
+                st.markdown(
+                    f"Su una ruota escono {N_DRAWN} numeri e si vince sempre solo se ogni gruppo di {N_DRAWN} numeri "
+                    f"contiene almeno un ambo giocato. Il tuo sistema ha già {t - 1} gruppi di numeri che non si "
+                    f"giocano tra loro; ne ammettiamo al massimo {N_DRAWN - 1}, quindi sui numeri nuovi ne restano "
+                    f"{N_DRAWN - t}. Il minimo di ambi per {N_DRAWN - t} gruppi è dato ancora dal teorema di Turán: "
+                    f"si dividono i numeri nuovi in {N_DRAWN - t} gruppi il più possibile uguali e si giocano tutti "
+                    f"gli ambi dentro ogni gruppo.")
+                st.markdown(
+                    f"Se potessi collegare anche i numeri già giocati, partendo da zero ne basterebbero "
+                    f"**{_it(f'{cert.from_scratch_edges:,}')}** in tutto. Tenere separati i tuoi {k} numeri costa "
+                    f"{_it(f'{cert.total_edges - cert.from_scratch_edges:,}')} ambi in più rispetto a quel minimo.")
 
 # ------------------------------------------------------------------ tab Confronto
 with tab_cmp:
