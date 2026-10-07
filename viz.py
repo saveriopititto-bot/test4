@@ -9,9 +9,31 @@ import plotly.graph_objects as go
 
 from core import Design, Stats
 
-ACCENT = "#2E6FD8"
-MUTED = "#9AA3AF"
-WARN = "#D9534F"
+# palette 1a
+DEEP = "#023047"        # deep space blue
+ACCENT = "#219EBC"      # blue green
+SKY = "#8ECAE6"         # sky blue light
+AMBER = "#FFB703"       # amber flame
+WARN = "#FB8500"        # princeton orange
+MUTED = "#7C9FB2"
+GRID = "#E2EEF4"
+TICK = "#3A5F74"
+NODE_BG = "#F2F8FB"
+
+FRONTIER_COLORS = [DEEP, ACCENT, SKY, AMBER]
+
+
+def _base_layout(fig: go.Figure, **kw) -> go.Figure:
+    """Sfondo trasparente, font Archivo, griglia tenue e niente linee d'asse."""
+    axis = dict(gridcolor=GRID, zeroline=False, showline=False, tickfont=dict(color=TICK, size=12),
+                title_font=dict(color=TICK, size=12))
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      font=dict(family="Archivo, sans-serif", color=DEEP),
+                      hoverlabel=dict(bgcolor="#fff", bordercolor=GRID, font=dict(family="Archivo", color=DEEP)),
+                      **kw)
+    fig.update_xaxes(**axis)
+    fig.update_yaxes(**axis)
+    return fig
 
 
 def _layout_nodes(design: Design) -> dict[int, tuple[float, float]]:
@@ -65,8 +87,8 @@ def graph_figure(design: Design, labels: Sequence[int]) -> go.Figure:
     big = design.k > 24
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=ex, y=ey, mode="lines", hoverinfo="skip",
-                             line=dict(color="rgba(46,111,216,0.35)", width=1)))
-    for nodes, colour in (([v for v in range(design.k) if v in covered], ACCENT),
+                             line=dict(color="rgba(33,158,188,0.45)", width=1.2)))
+    for nodes, colour in (([v for v in range(design.k) if v in covered], DEEP),
                           ([v for v in range(design.k) if v not in covered], MUTED)):
         if not nodes:
             continue
@@ -74,22 +96,20 @@ def graph_figure(design: Design, labels: Sequence[int]) -> go.Figure:
             x=[pos[v][0] for v in nodes], y=[pos[v][1] for v in nodes],
             mode="markers+text", text=[str(labels[v]) for v in nodes],
             textfont=dict(color="white", size=8 if big else 11),
-            marker=dict(size=15 if big else 26, color=colour),
+            marker=dict(size=18 if big else 28, color=colour, line=dict(width=0)),
             hovertext=[f"numero {labels[v]}" for v in nodes], hoverinfo="text"))
-    fig.update_layout(
-        showlegend=False, height=420, margin=dict(l=0, r=0, t=10, b=0),
-        xaxis=dict(visible=False, scaleanchor="y"), yaxis=dict(visible=False),
-        plot_bgcolor="rgba(0,0,0,0)")
+    _base_layout(fig, showlegend=False, height=360, margin=dict(l=20, r=20, t=20, b=20))
+    fig.update_layout(xaxis=dict(visible=False, scaleanchor="y"), yaxis=dict(visible=False))
     return fig
 
 
 def pmf_figure(stats: Stats) -> go.Figure:
     j = [i for i, p in enumerate(stats.pmf) if i >= 1 and p > 0]
     fig = go.Figure(go.Bar(
-        x=j, y=[stats.pmf[i] * 100 for i in j], marker_color=ACCENT,
+        x=j, y=[stats.pmf[i] * 100 for i in j], marker_color=ACCENT, marker_cornerradius=6,
         hovertemplate="%{x} ambi vincenti<br>%{y:.5f}%<extra></extra>"))
+    _base_layout(fig, height=300, margin=dict(l=0, r=0, t=10, b=0))
     fig.update_layout(
-        height=300, margin=dict(l=0, r=0, t=10, b=0),
         xaxis=dict(title="Ambi vincenti nell'estrazione", dtick=1),
         yaxis=dict(title="Probabilità (%)", type="log"))
     return fig
@@ -97,23 +117,26 @@ def pmf_figure(stats: Stats) -> go.Figure:
 
 def frontier_figure(series: dict[str, dict[str, list]], current: tuple[float, float] | None) -> go.Figure:
     fig = go.Figure()
-    for name, s in series.items():
+    for i, (name, s) in enumerate(series.items()):
+        disjoint = name.startswith("Coppie")
         fig.add_trace(go.Scatter(
-            x=s["cost"], y=s["p"], mode="lines+markers", name=name,
+            x=s["cost"], y=s["p"], mode="lines", name=name,
             customdata=np.column_stack([s["k"], s["edges"]]),
             hovertemplate=(name + "<br>k=%{customdata[0]} numeri, %{customdata[1]} ambi"
                            "<br>costo %{x:.2f} €<br>P(≥1 ambo) %{y:.3f}%<extra></extra>"),
-            line=dict(dash="dot" if name.startswith("Coppie") else "solid")))
+            line=dict(width=2.5,
+                      color=WARN if disjoint else FRONTIER_COLORS[i % len(FRONTIER_COLORS)],
+                      dash="dash" if disjoint else "solid")))
     if current is not None:
         fig.add_trace(go.Scatter(x=[current[0]], y=[current[1]], mode="markers", name="Scelta attuale",
-                                 marker=dict(symbol="star", size=16, color=WARN,
-                                             line=dict(width=1, color="white")),
+                                 marker=dict(symbol="circle", size=16, color=WARN,
+                                             line=dict(width=3, color="white")),
                                  hoverinfo="skip"))
+    _base_layout(fig, height=400, margin=dict(l=0, r=0, t=10, b=0))
     fig.update_layout(
-        height=420, margin=dict(l=0, r=0, t=10, b=0),
-        xaxis=dict(title="Costo (€)", type="log"),
-        yaxis=dict(title="P(vincere almeno un ambo) (%)"),
-        legend=dict(orientation="h", y=-0.25))
+        xaxis=dict(title="Costo (€, log)", type="log", showgrid=False),
+        yaxis=dict(title="P(≥1 ambo) %", ticksuffix="%"),
+        legend=dict(orientation="v", x=1.02, xanchor="left", y=1, bgcolor=NODE_BG, font=dict(size=13)))
     return fig
 
 
@@ -122,11 +145,12 @@ def bankroll_figure(net_path: np.ndarray, ev_per_draw: float) -> go.Figure:
     x = np.arange(1, n + 1)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=x, y=np.cumsum(net_path), mode="lines", name="Saldo simulato",
-                             line=dict(color=ACCENT, width=1.5)))
+                             line=dict(color=ACCENT, width=2)))
     fig.add_trace(go.Scatter(x=x, y=x * ev_per_draw, mode="lines", name="Tendenza attesa",
-                             line=dict(color=WARN, dash="dash")))
+                             line=dict(color=WARN, dash="dash", width=2.5)))
+    fig.add_hline(y=0, line=dict(color="#A5C2D1", width=1.5))
+    _base_layout(fig, height=320, margin=dict(l=0, r=0, t=10, b=0))
     fig.update_layout(
-        height=320, margin=dict(l=0, r=0, t=10, b=0),
-        xaxis=dict(title="Estrazioni"), yaxis=dict(title="Saldo cumulato (€)"),
-        legend=dict(orientation="h", y=-0.3))
+        xaxis=dict(title="Estrazioni", showgrid=False), yaxis=dict(title="Saldo cumulato (€)", ticksuffix=" €"),
+        legend=dict(orientation="h", x=0, y=1.12, font=dict(size=13)))
     return fig
