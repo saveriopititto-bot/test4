@@ -191,12 +191,12 @@ def metrics(items: Sequence[tuple[str, str, str]]) -> None:
     html(f'<div class="x-metrics">{cells}</div>')
 
 
-def loss_card(loss_pct: str, loss_eur: str, cost_eur: str, std_eur: str, p_profit: str) -> None:
+def loss_card(loss_pct: str, loss_eur: str, cost_eur: str, std_eur: str, p_profit: str, note: str = "") -> None:
     html(f"""<div class="x-loss">
 <div style="display:flex;flex-direction:column;gap:4px"><span class="k">Perdita media</span>
 <span class="v">{loss_pct}</span><span class="s">{loss_eur} su {cost_eur} giocati</span></div>
 <p>Vale per qualsiasi sistema con la stessa quota: il design cambia frequenza e varianza delle vincite,
-non la perdita attesa. Dev. std del netto {std_eur} · P(chiudere in positivo) {p_profit}.</p></div>""")
+non la perdita attesa. Dev. std del netto {std_eur} · P(chiudere in positivo) {p_profit}.{note}</p></div>""")
 
 
 def error_card(msg: str) -> None:

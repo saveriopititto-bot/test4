@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 import ilp_pulp
+import regole
 import style
 import viz
 from core import (
@@ -67,11 +68,25 @@ mode = sb_mode.radio("Cosa vuoi fissare?", [MODE_1, MODE_2, MODE_3])
 
 with sb_money:
     c = st.columns(2)
-    stake = c[0].number_input("Puntata/ambo (€)", min_value=0.01, value=1.0, step=0.5)
-    wheels = int(c[1].number_input("Ruote", min_value=1, max_value=11, value=1, step=1,
-                                   help="Stessi ambi su più ruote: estrazioni indipendenti, costo moltiplicato."))
-    payout = st.number_input("Quota ambo (× puntata)", min_value=1.0, value=AMBO_PAYOUT, step=10.0)
-    st.caption("Verifica le quote ufficiali ADM; tasse non modellate.")
+    stake = c[0].number_input("Puntata/ambo/ruota (€)", min_value=0.05, value=1.0, step=0.05,
+                              help="Importo per scontrino tra 1 e 200 €, a incrementi di 0,50 €.")
+    draws = int(c[1].number_input("Concorsi", min_value=1, max_value=regole.MAX_CONCORSI, value=1, step=1,
+                                  help=f"Abbonamento: stessa giocata per più concorsi, fino a {regole.MAX_CONCORSI}."))
+    if st.checkbox("Tutte le ruote (le 10 cittadine)",
+                   help="Le giocate \"su tutte le ruote\" non comprendono la ruota Nazionale."):
+        ruote = regole.RUOTE_CITTADINE
+        if st.checkbox("Aggiungi la ruota Nazionale"):
+            ruote += (regole.NAZIONALE,)
+    else:
+        ruote = tuple(st.multiselect("Ruote", regole.RUOTE, default=["Bari"],
+                                     help="Stessi ambi su più ruote: estrazioni indipendenti."))
+        if not ruote:
+            st.error("Scegli almeno una ruota.")
+            st.stop()
+    wheels = len(ruote)
+    payout = st.number_input("Quota ambo (× puntata)", min_value=1.0, value=AMBO_PAYOUT, step=10.0,
+                             help="Coefficiente ufficiale per l'ambo su una singola ruota: 250.")
+    tax = regole.RITENUTA if st.checkbox(f"Ritenuta {regole.RITENUTA:.0%} sulle vincite", value=True) else 0.0
 
 k: int
 t: int
@@ -83,22 +98,23 @@ with sb_params:
         t = st.slider("Garanzia t", 2, min(N_DRAWN, k), min(3, k))
         st.caption(T_HELP)
     elif mode == MODE_2:
-        budget = st.number_input("Budget (€)", min_value=0.0, value=20.0, step=1.0)
+        budget = st.number_input("Budget totale (€)", min_value=0.0, value=20.0, step=1.0)
         t = st.slider("Garanzia t", 2, N_DRAWN, 3)
         st.caption(T_HELP)
-        k_best = max_k_for_edges(t, max_edges_for_budget(budget, stake, wheels))
+        k_best = max_k_for_edges(t, max_edges_for_budget(budget, stake, wheels * draws))
         if k_best is None:
-            err = f"Con {eur(budget)} non si copre nemmeno il minimo: serve almeno {eur(stake * wheels)}."
+            err = f"Con {eur(budget)} non si copre nemmeno il minimo: serve almeno {eur(stake * wheels * draws)}."
             k = max(t, 3)
         else:
             k = k_best
     else:
-        budget = st.number_input("Budget (€)", min_value=0.0, value=20.0, step=1.0)
+        budget = st.number_input("Budget totale (€)", min_value=0.0, value=20.0, step=1.0)
         k = st.slider("Numeri scelti (k)", 3, 40, 10)
-        t_best = best_t_for_edges(k, max_edges_for_budget(budget, stake, wheels))
+        t_best = best_t_for_edges(k, max_edges_for_budget(budget, stake, wheels * draws))
         if t_best is None:
             t = min(N_DRAWN, k)
-            err = f"Con {k} numeri la garanzia più debole (t={t}) costa almeno {eur(turan_min_edges(k, t) * stake * wheels)}."
+            need = turan_min_edges(k, t) * stake * wheels * draws
+            err = f"Con {k} numeri la garanzia più debole (t={t}) costa almeno {eur(need)}."
         else:
             t = t_best
 
@@ -113,7 +129,12 @@ with sb_nums:
 
 # ------------------------------------------------------------------ calcolo principale
 design = turan_design(k, t)
-stats = analyze(design, t=t, stake=stake, wheels=wheels, payout=payout)
+stats = analyze(design, t=t, stake=stake, wheels=wheels, payout=payout, tax=tax, draws=draws)
+stats1 = stats if draws == 1 else analyze(design, t=t, stake=stake, wheels=wheels, payout=payout, tax=tax)
+importo = stats1.cost                       # importo per concorso
+n_scontrini = regole.scontrini_necessari(importo)
+importo_err = [e for e in regole.valida_importo(importo) if "massimo" not in e]
+ruote_txt = "tutte" if ruote == regole.RUOTE_CITTADINE else ", ".join(ruote)
 
 
 def summary() -> None:
@@ -123,17 +144,24 @@ def summary() -> None:
                      f"({eur(stats.cost)} su {eur(budget)} di budget).")
     style.metrics([
         ("Ambi da giocare", str(design.n_edges), f"su {comb(k, 2)} possibili"),
-        ("Costo totale", eur(stats.cost), f"{eur(stake)} × {wheels} ruota/e"),
+        ("Costo totale", eur(stats.cost),
+         f"{eur(importo)} × {draws} concorsi" if draws > 1 else f"{eur(stake)} × {wheels} ruota/e"),
         ("Garanzia", f"{t} su {k}", f"se escono ≥ {t} dei {k}"),
         ("P(garanzia scatta)", pct(stats.p_guarantee * 100), one_in(stats.p_guarantee)),
         ("P(vincere ≥ 1 ambo)", pct(stats.p_win_any * 100), one_in(stats.p_win_any)),
     ])
+    for e in importo_err:
+        style.error_card(f"Giocata non valida: {e} (importo per concorso {eur(importo)}).")
+    if n_scontrini > 1:
+        style.html(f'<p class="x-note">Importo per concorso {eur(importo)}: oltre il massimo di '
+                   f'{eur(regole.IMPORTO_MAX)} per scontrino servono almeno <strong>{n_scontrini} scontrini</strong>.</p>')
+    note = (f" Ritenuta dell'{tax:.0%} sulle vincite inclusa." if tax else " Senza ritenuta sulle vincite.")
     style.loss_card(pct(stats.loss_pct, 1), eur(-stats.ev_net), eur(stats.cost),
-                    eur(stats.std_net), pct(stats.p_profit * 100))
+                    eur(stats.std_net), pct(stats.p_profit * 100), note)
 
 
-tab_res, tab_cmp, tab_ilp, tab_pulp, tab_sim, tab_model = st.tabs(
-    ["Risultato", "Confronto", "Verifica ILP", "ILP con PuLP", "Simulazione", "Modello"])
+tab_res, tab_win, tab_cmp, tab_ilp, tab_pulp, tab_sim, tab_model = st.tabs(
+    ["Risultato", "Calcolo vincite", "Confronto", "Verifica ILP", "ILP con PuLP", "Simulazione", "Modello"])
 
 # ------------------------------------------------------------------ tab Risultato
 with tab_res:
@@ -153,30 +181,132 @@ with tab_res:
                        + ", ".join(str(s) for s in sizes) + ".")
         with right, style.card("dist"):
             style.title("Distribuzione dell'esito")
-            nz = [(j, p) for j, p in enumerate(stats.pmf) if p > 0]
+            nz = [(j, p) for j, p in enumerate(stats.pmf) if p > 1e-12]
             lo = min(math.log10(p) for _, p in nz) - 0.6
             rows = []
             for j, p in nz:
-                net = j * stake * payout - stats.cost
+                net = j * stats.win_value - stats.cost
                 net_color = style.DEEP if net > 0 else style.A700
                 width = max(2.0, (math.log10(p) - lo) / -lo * 100)
                 rows.append([str(j), eur(j * stake * payout), f'<span style="color:{net_color}">{eur(net)}</span>',
                              pct(p * 100, 4),
                              f'<div style="display:flex;flex-direction:column;gap:4px">{style.bar(width)}'
                              f'<span style="font-size:12px">{one_in(p)}</span></div>'])
-            style.table(["Ambi", "Incasso", "Netto", "Probabilità", "Frequenza (scala log)"], rows, {4: "34%"})
+            style.table(["Ambi", "Vincita lorda", "Saldo netto", "Probabilità", "Frequenza (scala log)"],
+                        rows, {4: "34%"})
+            if regole.tetto_mai_raggiunto_ambo():
+                st.caption(f"Saldo dopo la ritenuta. Con sole puntate su ambo uno scontrino vince al massimo "
+                           f"{eur(regole.COEFFICIENTI[regole.AMBO] * regole.IMPORTO_MAX)}: il tetto di "
+                           f"{eur(regole.VINCITA_MAX_SCONTRINO)} non viene mai raggiunto.")
 
         pairs = [(labels[a], labels[b]) for a, b in design.edges]
         ticket = pd.DataFrame(
-            [{"Ambo": i + 1, "Numero A": a, "Numero B": b, "Puntata (€)": stake, "Ruote": wheels}
-             for i, (a, b) in enumerate(pairs)])
+            [{"Ambo": i + 1, "Numero A": a, "Numero B": b, "Posta (€)": round(stake * wheels, 2),
+              "Ruote": ruote_txt, "Concorsi": draws} for i, (a, b) in enumerate(pairs)])
         with style.card("ticket"):
             c = st.columns([1, 0.2], vertical_alignment="center")
             with c[0]:
-                style.title(f"Schedina · {design.n_edges} ambi × {wheels} ruota/e")
+                style.title(f"Schedina · {design.n_edges} ambi · ruote: {ruote_txt}")
             c[1].download_button("Scarica CSV", ticket.to_csv(index=False).encode("utf-8"),
                                  file_name=f"ambi_k{k}_t{t}.csv", mime="text/csv", width="stretch")
             style.pairs_grid(pairs)
+            st.caption("La posta di ogni ambo è divisa tra le ruote giocate (i coefficienti valgono per una ruota).")
+
+# ------------------------------------------------------------------ tab Calcolo vincite
+SORTI_LABEL = {
+    regole.ESTRATTO: "Estratto", regole.ESTRATTO_DETERMINATO: "Estratto determinato",
+    regole.AMBO: "Ambo", regole.AMBETTO: "Ambetto", regole.TERNO: "Terno",
+    regole.QUATERNA: "Quaterna", regole.CINQUINA: "Cinquina",
+}
+
+
+def parse_list(text: str) -> list[int]:
+    return [int(x) for x in re.split(r"[,\s;\-]+", text.strip()) if x]
+
+
+with tab_win:
+    with style.card("win_rules"):
+        style.title("Coefficienti ufficiali")
+        st.markdown("La posta di ogni sorte è divisa tra le combinazioni giocate e tra le ruote; i coefficienti "
+                    f"valgono per una singola ruota. Tetto di {eur(regole.VINCITA_MAX_SCONTRINO)} per scontrino, "
+                    f"poi ritenuta dell'{regole.RITENUTA:.0%}.")
+        style.table(["Sorte", "Coefficiente", "Ritorno medio per 1 €", "Con ritenuta"],
+                    [[SORTI_LABEL[s_], _it(f"{c_:,.3f}".rstrip("0").rstrip(".")),
+                      eur(regole.ritorno_atteso_per_euro(s_)),
+                      eur(regole.ritorno_atteso_per_euro(s_, regole.RITENUTA))]
+                     for s_, c_ in regole.COEFFICIENTI.items()])
+
+    estrazione: dict[str, tuple[int, ...]] = {}
+    with style.card("win_draw"):
+        style.title("Estrazione")
+        c = st.columns([1, 1], vertical_alignment="bottom")
+        src = c[0].radio("Numeri estratti", ["Casuale", "Inseriti a mano"], horizontal=True, key="win_src")
+        if src == "Casuale":
+            estrazione = regole.estrazione_casuale(int(c[1].number_input("Seed", 0, 1_000_000, 1, key="win_seed")))
+        else:
+            cols = st.columns(4)
+            for i, r_ in enumerate(regole.RUOTE):
+                txt = cols[i % 4].text_input(r_, key=f"win_e_{r_}", placeholder="5 numeri in ordine")
+                if txt.strip():
+                    try:
+                        estrazione[r_] = tuple(parse_list(txt))
+                    except ValueError:
+                        style.error_card(f"{r_}: inserisci solo numeri interi.")
+        try:
+            regole.valida_estrazione(estrazione)
+        except ValueError as e:
+            style.error_card(str(e))
+            estrazione = {}
+        if estrazione:
+            style.table(["Ruota", "1°", "2°", "3°", "4°", "5°"],
+                        [[r_, *map(str, v)] for r_, v in estrazione.items()])
+
+    giocate: list[regole.Giocata] = []
+    with style.card("win_ticket"):
+        style.title("Scontrino")
+        if not err and st.checkbox(f"Includi il sistema ridotto ({design.n_edges} ambi, posta "
+                                   f"{eur(stake * wheels)} ciascuno, ruote: {ruote_txt})",
+                                   value=design.n_edges <= 2000, key="win_sys"):
+            giocate += [regole.Giocata((labels[a], labels[b]), {regole.AMBO: stake * wheels}, ruote)
+                        for a, b in design.edges]
+        with st.expander("Aggiungi una giocata libera", expanded=not giocate):
+            c = st.columns([2, 2, 1])
+            nums_txt = c[0].text_input("Numeri (da 1 a 10)", key="win_nums", placeholder="es. 10, 20, 33")
+            r_sel = c[1].multiselect("Ruote", [regole.TUTTE, *regole.RUOTE], default=["Bari"], key="win_ruote")
+            pos = int(c[2].number_input("Posizione (estratto det.)", 1, regole.N_ESTRATTI, 1, key="win_pos"))
+            c = st.columns(4)
+            poste = {s_: c[i % 4].number_input(f"{SORTI_LABEL[s_]} (€)", 0.0, regole.IMPORTO_MAX, 0.0, step=0.5,
+                                               key=f"win_p_{s_}")
+                     for i, s_ in enumerate(regole.COEFFICIENTI)}
+            if nums_txt.strip() and any(poste.values()):
+                try:
+                    giocate.append(regole.Giocata(tuple(parse_list(nums_txt)), poste, tuple(r_sel), posizione=pos))
+                except ValueError as e:
+                    style.error_card(f"Giocata libera non valida: {e}")
+
+    if giocate and estrazione:
+        imp = sum(g.importo for g in giocate)
+        esito = regole.calcola_vincita(giocate, estrazione, ritenuta=tax)
+        with style.card("win_result"):
+            style.title("Esito")
+            for e in regole.valida_importo(imp):
+                style.error_card(f"{e} (importo dello scontrino: {eur(imp)}).")
+            style.metrics([
+                ("Importo", eur(esito.importo), f"{len(giocate)} giocate"),
+                ("Vincita lorda", eur(esito.lordo), f"{len(esito.righe)} righe vincenti"),
+                ("Dopo il tetto", eur(esito.lordo_pagabile), f"max {eur(regole.VINCITA_MAX_SCONTRINO)}"),
+                (f"Ritenuta {tax:.0%}", eur(esito.ritenuta), "sulle vincite"),
+                ("Vincita netta", eur(esito.netto), f"saldo {eur(esito.netto - esito.importo)}"),
+            ])
+            if esito.righe:
+                style.table(["Giocata", "Numeri", "Ruota", "Sorte", "Combinazioni vincenti", "Vincita lorda"],
+                            [[str(r_.giocata + 1), "-".join(map(str, giocate[r_.giocata].numeri)), r_.ruota,
+                              SORTI_LABEL[r_.sorte], f"{r_.vincenti} su {r_.combinazioni}", eur(r_.lordo)]
+                             for r_ in esito.righe])
+            else:
+                st.markdown("Nessuna combinazione vincente.")
+    elif not giocate:
+        st.caption("Includi il sistema o aggiungi una giocata per calcolare le vincite.")
 
 # ------------------------------------------------------------------ tab Confronto
 with tab_cmp:
@@ -186,7 +316,7 @@ with tab_cmp:
         summary()
 
         def row(label: str, d: Design, guarantee_t: int | None) -> list[str]:
-            s = analyze(d, t=guarantee_t, stake=stake, wheels=wheels, payout=payout)
+            s = analyze(d, t=guarantee_t, stake=stake, wheels=wheels, payout=payout, tax=tax, draws=draws)
             return [
                 label, str(d.n_edges), eur(s.cost), f"{guarantee_t} su {d.k}" if guarantee_t else "nessuna",
                 pct(s.p_guarantee * 100) if s.p_guarantee is not None else "—",
@@ -214,14 +344,15 @@ with tab_cmp:
                 "garantiscono nulla, però hanno la più alta probabilità di incassare almeno una volta.")
 
         @st.cache_data(show_spinner=False)
-        def frontier(stake_: float, wheels_: int, payout_: float, k_max: int = 40) -> dict:
+        def frontier(stake_: float, wheels_: int, payout_: float, tax_: float, draws_: int,
+                     k_max: int = 40) -> dict:
             out: dict[str, dict[str, list]] = {}
             for tt in range(2, N_DRAWN + 1):
                 name = "Tutti gli ambi (t=2)" if tt == 2 else f"Sistema ridotto t={tt}"
                 s: dict[str, list] = {"cost": [], "p": [], "k": [], "edges": []}
                 for kk in range(tt, k_max + 1):
                     d = turan_design(kk, tt)
-                    st_ = analyze(d, stake=stake_, wheels=wheels_, payout=payout_)
+                    st_ = analyze(d, stake=stake_, wheels=wheels_, payout=payout_, tax=tax_, draws=draws_)
                     s["cost"].append(st_.cost)
                     s["p"].append(st_.p_win_any * 100)
                     s["k"].append(kk)
@@ -230,7 +361,7 @@ with tab_cmp:
             s = {"cost": [], "p": [], "k": [], "edges": []}
             for e in range(1, N_NUMBERS // 2 + 1):
                 d = matching_design(e)
-                st_ = analyze(d, stake=stake_, wheels=wheels_, payout=payout_)
+                st_ = analyze(d, stake=stake_, wheels=wheels_, payout=payout_, tax=tax_, draws=draws_)
                 s["cost"].append(st_.cost)
                 s["p"].append(st_.p_win_any * 100)
                 s["k"].append(d.k)
@@ -241,7 +372,7 @@ with tab_cmp:
         with style.card("frontier"):
             style.title("Frontiera: costo vs probabilità di vincita")
             st.plotly_chart(
-                viz.frontier_figure(frontier(stake, wheels, payout), (stats.cost, stats.p_win_any * 100)),
+                viz.frontier_figure(frontier(stake, wheels, payout, tax, draws), (stats.cost, stats.p_win_any * 100)),
                 width="stretch", config=PLOTLY_CONFIG)
             st.markdown("Ogni punto è un design (k crescente lungo la curva). A parità di costo, più si alza la "
                         "garanzia richiesta più si rinuncia a probabilità di vincita.")
@@ -295,7 +426,8 @@ with tab_ilp, style.card("ilp"):
                 st.caption("Struttura trovata: "
                            + (f"cliche disgiunte di taglia {', '.join(map(str, sizes))}."
                               if sizes is not None else "non è un'unione di cliche."))
-                s_ilp = analyze(d_ilp, t=tt if mm == 1 else None, stake=stake, wheels=wheels, payout=payout)
+                s_ilp = analyze(d_ilp, t=tt if mm == 1 else None, stake=stake, wheels=wheels, payout=payout,
+                                tax=tax, draws=draws)
                 c = st.columns(3)
                 c[0].metric("P(≥1 ambo)", pct(s_ilp.p_win_any * 100))
                 c[1].metric("Perdita media", eur(-s_ilp.ev_net))
@@ -320,7 +452,8 @@ with tab_pulp, style.card("pulp"):
         if c[3].button("Risolvi con PuLP", type="primary", width="stretch"):
             with st.spinner("Calcolo in corso…"):
                 res_p = ilp_pulp.solve_ilp_lotto(k_p, t_p, time_limit=float(tl_p))
-                met = ilp_pulp.analizza_metriche_sistema(k_p, t_p, res_p.ambi, costo_per_ambo=stake, quota=payout)
+                met = ilp_pulp.analizza_metriche_sistema(k_p, t_p, res_p.ambi, costo_per_ambo=stake,
+                                                         quota=payout * (1 - tax))
             st.session_state["pulp"] = (res_p, met)
         st.caption(f"{comb(k_p, 2)} variabili, {comb(k_p, t_p)} vincoli.")
         if "pulp" in st.session_state:
@@ -368,18 +501,18 @@ with tab_sim:
             c = st.columns([1, 1, 0.6], vertical_alignment="bottom")
             n_draws = int(c[0].number_input("Estrazioni simulate", 1_000, 2_000_000, 200_000, step=50_000))
             seed = int(c[1].number_input("Seed", 0, 10_000, 42))
-            sim_key = (mode, k, t, budget, stake, wheels, payout, tuple(labels), n_draws, seed)
+            sim_key = (mode, k, t, budget, stake, ruote, payout, tax, tuple(labels), n_draws, seed)
             if c[2].button("Simula", type="primary", width="stretch"):
                 with st.spinner("Simulazione in corso…"):
                     W = run_sim(design.edges, k, n_draws, wheels, seed)
-                net = W * stake * payout - stats.cost
+                net = W * stats1.win_value - stats1.cost
                 se = net.std(ddof=1) / np.sqrt(len(net))
                 st.session_state["sim"] = {
-                    "key": sim_key, "n": n_draws, "ev": stats.ev_net, "path": net[:min(n_draws, 5000)],
+                    "key": sim_key, "n": n_draws, "ev": stats1.ev_net, "path": net[:min(n_draws, 5000)],
                     "rows": [
-                        ["P(≥ 1 ambo)", pct((W >= 1).mean() * 100), pct(stats.p_win_any * 100)],
-                        ["P(profitto)", pct((net > 1e-9).mean() * 100), pct(stats.p_profit * 100)],
-                        ["Netto medio per estrazione", f"{eur(net.mean())} ± {eur(1.96 * se)}", eur(stats.ev_net)],
+                        ["P(≥ 1 ambo)", pct((W >= 1).mean() * 100), pct(stats1.p_win_any * 100)],
+                        ["P(profitto)", pct((net > 1e-9).mean() * 100), pct(stats1.p_profit * 100)],
+                        ["Netto medio per estrazione", f"{eur(net.mean())} ± {eur(1.96 * se)}", eur(stats1.ev_net)],
                     ]}
             sim = st.session_state.get("sim")
             if sim is None:
@@ -421,10 +554,19 @@ with tab_model:
                                       "archi che contiene. Per grafi a cliche disgiunte si conta con una "
                                       "programmazione dinamica esatta; per grafi generici si enumerano gli "
                                       "m-sottoinsiemi. Con più ruote la distribuzione è la convoluzione."),
-        ("05 · Valore atteso", "Per linearità, E[ritorno] = |E| · puntata · ruote · quota · P(ambo): con quota "
+        ("05 · Valore atteso", "Per linearità, E[ritorno] = |E| · puntata · ruote · concorsi · quota · "
+                               "(1 − ritenuta) · P(ambo): con quota "
                                f"{_it(f'{payout:g}')} si recupera in media il "
-                               f"<strong>{_it(f'{payout * P_AMBO * 100:.2f}')}%</strong> di quanto giocato, "
-                               "per qualsiasi design."),
-        ("06 · Limiti", "Quota e puntata sono parametri; tasse sulle vincite, limiti di puntata e regole di "
-                        "ripartizione della schedina reale non sono modellati."),
+                               f"<strong>{_it(f'{payout * P_AMBO * 100:.2f}')}%</strong> di quanto giocato "
+                               f"(il <strong>{_it(f'{payout * (1 - regole.RITENUTA) * P_AMBO * 100:.2f}')}%"
+                               f"</strong> dopo la ritenuta dell'{regole.RITENUTA:.0%}), per qualsiasi design."),
+        ("06 · Regole di gioco", "10 ruote cittadine più la Nazionale (“tutte le ruote” = le 10 cittadine). "
+                                 "Coefficienti per una singola ruota: la posta è divisa tra ruote e combinazioni. "
+                                 f"Scontrino da {eur(regole.IMPORTO_MIN)} a {eur(regole.IMPORTO_MAX)} a passi di "
+                                 f"{eur(regole.IMPORTO_STEP)}, vincita massima {eur(regole.VINCITA_MAX_SCONTRINO)}, "
+                                 f"ritenuta dell'{regole.RITENUTA:.0%}, abbonamento fino a "
+                                 f"{regole.MAX_CONCORSI} concorsi."),
+        ("07 · Limiti", "Ambetto: si assume la numerazione circolare (il precedente di 1 è 90) e che il numero "
+                        "vicino non sia a sua volta giocato. Orari di raccolta e modalità di compilazione non "
+                        "incidono sul calcolo."),
     ])
